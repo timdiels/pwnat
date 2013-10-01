@@ -127,27 +127,27 @@ int udpclient(int argc, char* argv[])
     rport = argv[i++];
 
     /* Get address from the machine */
-	rsrc.sin_family = PF_INET;
-	rsrc.sin_addr.s_addr = INADDR_ANY;
-	if (lhost)
-	{
-		hp = gethostbyname(lhost);
-		memcpy(&rsrc.sin_addr, hp->h_addr, hp->h_length); 
-		inet_pton(AF_INET, lhost, &(rsrc.sin_addr));
-	}
+    rsrc.sin_family = PF_INET;
+    rsrc.sin_addr.s_addr = INADDR_ANY;
+    if (lhost)
+    {
+        hp = gethostbyname(lhost);
+        memcpy(&rsrc.sin_addr, hp->h_addr, hp->h_length); 
+        inet_pton(AF_INET, lhost, &(rsrc.sin_addr));
+    }
 
-	/* IP of destination */
-	memset(&src, 0, sizeof(struct sockaddr_in));
-	hp					  = gethostbyname(phost);
-	timeexc_ip            = *(uint32_t*)hp->h_addr_list[0];
-	src.sin_family        = AF_INET;
-	src.sin_port          = 0;
-	src.sin_addr.s_addr   = timeexc_ip;
+    /* IP of destination */
+    memset(&src, 0, sizeof(struct sockaddr_in));
+    hp					  = gethostbyname(phost);
+    timeexc_ip            = *(uint32_t*)hp->h_addr_list[0];
+    src.sin_family        = AF_INET;
+    src.sin_port          = 0;
+    src.sin_addr.s_addr   = timeexc_ip;
 
     /* IP of where the fake packet (echo request) was going */
-	hp = gethostbyname("3.3.3.3");
-	memcpy(&dest.sin_addr, hp->h_addr, hp->h_length); 
-	inet_pton(AF_INET, "3.3.3.3", &(dest.sin_addr));
+    hp = gethostbyname("3.3.3.3");
+    memcpy(&dest.sin_addr, hp->h_addr, hp->h_length); 
+    inet_pton(AF_INET, "3.3.3.3", &(dest.sin_addr));
  
     srand(time(NULL));
     next_req_id = rand() % 0xffff;
@@ -180,7 +180,7 @@ int udpclient(int argc, char* argv[])
     gettimeofday(&check_time, NULL);
     
     /* open raw socket */
-	icmp_sock = create_icmp_socket();
+    icmp_sock = create_icmp_socket();
     if (icmp_sock == -1) {
         printf("[main] can't open raw socket\n");
         exit(1);
@@ -191,11 +191,11 @@ int udpclient(int argc, char* argv[])
         if(!timerisset(&timeout))
             timeout.tv_usec = 50000;
 
-		if (timeexc++ % 100 == 0)
-		{
-			/* Send ICMP TTL exceeded to penetrate remote NAT */
-			send_icmp(icmp_sock, &rsrc, &src, &dest, 0);
-		}
+        if (timeexc++ % 100 == 0)
+        {
+            /* Send ICMP TTL exceeded to penetrate remote NAT */
+            send_icmp(icmp_sock, &rsrc, &src, &dest, 0);
+        }
 
         read_fds = client_fds;
         FD_SET(SOCK_FD(tcp_serv), &read_fds);
@@ -286,8 +286,8 @@ int udpclient(int argc, char* argv[])
                 ret = client_recv_udp_msg(client, data, sizeof(data),
                                           &tmp_id, &tmp_type, &tmp_len);
                 if(ret == 0)
-                    ret = handle_message(client, tmp_id, tmp_type,
-                                         data, tmp_len);
+                    ret = handle_message(client, tmp_id, tmp_type, data, tmp_len);
+
                 if(ret < 0)
                 {
                     disconnect_and_remove_client(tmp_req_id, conn_clients,
@@ -336,15 +336,6 @@ int udpclient(int argc, char* argv[])
                 ret = client_recv_tcp_data(client);
                 if(ret == 0)
                     ret = client_send_udp_data(client);
-#if 0 /* if udptunnel is taking up 100% of cpu, try including this */
-                else if(ret == 1)
-#ifdef WIN32
-                    _sleep(1);
-#else
-                    usleep(1000); /* Quick hack so doesn't use 100% of CPU if
-                                     data wasn't ready yet (waiting for ack) */
-#endif /*WIN32*/
-#endif /*0*/          
                 
                 if(ret < 0)
                 {
