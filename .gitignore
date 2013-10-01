@@ -1,2 +1,3 @@
 *.o
-pwnat
+*.swp
+build/*/pwnat
