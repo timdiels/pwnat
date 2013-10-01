@@ -78,7 +78,7 @@ int send_icmp( int icmp_sock, struct sockaddr_in *rsrc,  struct sockaddr_in *des
 	if (!server)
 		pkt_len *= 2;
 
-	packet = malloc(pkt_len);
+	packet = new char[pkt_len];
 	memset(packet, 0, pkt_len);
 
 	ip_pkt = (struct ip_packet_t*)packet;
@@ -93,7 +93,7 @@ int send_icmp( int icmp_sock, struct sockaddr_in *rsrc,  struct sockaddr_in *des
 	ip_pkt->src_ip = rsrc->sin_addr.s_addr; // insert source IP address here
 	ip_pkt->dst_ip = dest_addr->sin_addr.s_addr;
 
-	pkt = malloc(ICMPHDR_SIZE);
+	pkt = (icmp_packet_t*)malloc(ICMPHDR_SIZE);
 	memset(pkt, 0, ICMPHDR_SIZE);
 	pkt->type = server ? 8 : 11; // ICMP echo request or time exceeded
 	pkt->code = 0; // Must be zero 
@@ -104,7 +104,7 @@ int send_icmp( int icmp_sock, struct sockaddr_in *rsrc,  struct sockaddr_in *des
 	/* Generate "original" packet if client to append to time exceeded */
 	if (!server)
 	{
-		ip_pkt2	= malloc(IPHDR_SIZE);
+		ip_pkt2	= (ip_packet_t*)malloc(IPHDR_SIZE);
 		memset(ip_pkt2, 0, IPHDR_SIZE);
 		ip_pkt2->vers_ihl = 0x45;
 		ip_pkt2->tos = 0;
@@ -118,7 +118,7 @@ int send_icmp( int icmp_sock, struct sockaddr_in *rsrc,  struct sockaddr_in *des
 		ip_pkt2->src_ip = dest_addr->sin_addr.s_addr;//htonl(0x7f000001); // localhost..
 		ip_pkt2->dst_ip = src_addr->sin_addr.s_addr;//htonl(0x7f000001); // localhost..
 	   
-		pkt2 = malloc(ICMPHDR_SIZE);
+		pkt2 = (icmp_packet_t*)malloc(ICMPHDR_SIZE);
 		memset(pkt2, 0, ICMPHDR_SIZE);
 		pkt2->type = 8; // ICMP echo request
 		pkt2->code = 0; // Must be zero 

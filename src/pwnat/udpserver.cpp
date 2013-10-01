@@ -1,22 +1,20 @@
 /*
- * Project: udptunnel
- * File: udpserver.c
+ * Copyright (C) 2009, 2013 by Daniel Meekins, Tim Diels
  *
- * Copyright (C) 2009 Daniel Meekins
- * Contact: dmeekins - gmail
+ * This file is part of pwnat.
  *
- * This program is free software: you can redistribute it and/or modify
+ * pwnat is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
+ * 
+ * pwnat is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
+ * 
  * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <stdio.h>
@@ -236,10 +234,9 @@ int udpserver(int argc, char *argv[])
 		//printf("bind failed\n");
 
 	int ip;
-	char *ips;
+	char ips[16];
 	unsigned char *packet;
-	ips = malloc(16);
-	packet = malloc(IP_MAX_SIZE);
+	packet = new unsigned char[IP_MAX_SIZE];
 
     while(running)
     {
@@ -291,7 +288,7 @@ int udpserver(int argc, char *argv[])
         {
             for(i = 0; i < LIST_LEN(clients); i++)
             {
-                client = list_get_at(clients, i);
+                client = (client_t*)list_get_at(clients, i);
 
                 if(client_timed_out(client, curr_time))
                 {
@@ -337,7 +334,7 @@ int udpserver(int argc, char *argv[])
         /* Go through all the clients and get any TCP data that is ready */
         for(i = 0; i < LIST_LEN(clients) && num_fds > 0; i++)
         {
-            client = list_get_at(clients, i);
+            client = (client_t*)list_get_at(clients, i);
 
             if(client_tcp_fd_isset(client, &read_fds))
             {
@@ -396,7 +393,7 @@ void disconnect_and_remove_client(uint16_t id, list_t *clients, fd_set *fds)
     if(id == 0)
         return;
     
-    c = list_get(clients, &id);
+    c = (client_t*)list_get(clients, &id);
     if(!c)
         return;
 
@@ -424,7 +421,7 @@ int handle_message(uint16_t id, uint8_t msg_type, char *data, int data_len,
     
     if(id != 0)
     {
-        c = list_get(clients, &id);
+        c = (client_t*)list_get(clients, &id);
         if(!c)
             return -1;
     }
@@ -484,7 +481,7 @@ int handle_message(uint16_t id, uint8_t msg_type, char *data, int data_len,
             sock_free(tcp_sock);
             ERROR_GOTO(c == NULL, "Error creating client", error);
 
-            c2 = list_add(clients, c);
+            c2 = (client_t*) list_add(clients, c);
             ERROR_GOTO(c2 == NULL, "Error adding client to list", error);
 
             if(debug_level >= DEBUG_LEVEL1)
@@ -551,7 +548,7 @@ int destination_allowed(list_t *allowed_destinations,
 
     for (i = 0; i < LIST_LEN(allowed_destinations); i++)
     {
-        destination_t *dst = list_get_at(allowed_destinations, i);
+        destination_t *dst = (destination_t*)list_get_at(allowed_destinations, i);
         if ((!dst->host || !strcmp(dst->host, host))
              && (!dst->port || !strcmp(dst->port, port)))
             return 1;

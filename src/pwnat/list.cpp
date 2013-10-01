@@ -33,27 +33,27 @@ list_t *list_create(int obj_sz,
                     void* (*obj_copy)(void *, const void *, size_t),
                     void (*obj_free)(void *))
 {
-    list_t *new;
+    list_t *new_;
 
-    new = malloc(sizeof(*new));
-    if(!new)
+    new_ = new list_t;
+    if(!new_)
         return NULL;
 
-    new->obj_arr = malloc(LIST_INIT_SIZE * sizeof(void *));
-    if(!new->obj_arr)
+    new_->obj_arr = (void**)malloc(LIST_INIT_SIZE * sizeof(void *));
+    if(!new_->obj_arr)
     {
-        free(new);
+        free(new_);
         return NULL;
     }
 
-    new->obj_sz = obj_sz;
-    new->num_objs = 0;
-    new->length = LIST_INIT_SIZE;
-    new->obj_cmp = obj_cmp ? obj_cmp : &memcmp;
-    new->obj_copy = obj_copy ? obj_copy : &memcpy;
-    new->obj_free = obj_free ? obj_free : &free;
+    new_->obj_sz = obj_sz;
+    new_->num_objs = 0;
+    new_->length = LIST_INIT_SIZE;
+    new_->obj_cmp = obj_cmp ? obj_cmp : &memcmp;
+    new_->obj_copy = obj_copy ? obj_copy : &memcpy;
+    new_->obj_free = obj_free ? obj_free : &free;
 
-    return new;
+    return new_;
 }
 
 /*
@@ -82,7 +82,7 @@ void *list_add(list_t *list, void *obj)
     /* Resize the object array if needed, doubling the size */
     if(list->num_objs == list->length)
     {
-        new_arr = realloc(list->obj_arr, list->length * 2 * sizeof(void *));
+        new_arr = (void**)realloc(list->obj_arr, list->length * 2 * sizeof(void *));
         if(!new_arr)
         {
             list->obj_free(o);
@@ -165,14 +165,14 @@ list_t *list_copy(list_t *src)
     list_t *dst;
     int i;
     
-    dst = malloc(sizeof(*dst));
+    dst = new list_t;
     if(!dst)
         return NULL;
 
     memcpy(dst, src, sizeof(*src));
 
     /* Create the pointer array */
-    dst->obj_arr = malloc(sizeof(void *) * src->length);
+    dst->obj_arr = (void**)malloc(sizeof(void *) * src->length);
     if(!dst->obj_arr)
     {
         free(dst);

@@ -58,9 +58,10 @@ socket_t *sock_create(char *host, char *port, int ipver, int sock_type,
     struct sockaddr *paddr;
     int ret;
     
-    sock = calloc(1, sizeof(*sock));
+    sock = new socket_t;
     if(!sock)
         return NULL;
+    memset(sock, 0, sizeof(socket_t));
 
     paddr = (struct sockaddr *)&sock->addr;
     sock->fd = -1;
@@ -117,15 +118,15 @@ socket_t *sock_create(char *host, char *port, int ipver, int sock_type,
 
 socket_t *sock_copy(socket_t *sock)
 {
-    socket_t *new;
+    socket_t *new_;
 
-    new = malloc(sizeof(*sock));
-    if(!new)
+    new_ = new socket_t;
+    if(!new_)
         return NULL;
 
-    memcpy(new, sock, sizeof(*sock));
+    memcpy(new_, sock, sizeof(*sock));
 
-    return new;
+    return new_;
 }
 
 /*
@@ -190,9 +191,10 @@ socket_t *sock_accept(socket_t *serv)
 {
     socket_t *client;
     
-    client = calloc(1, sizeof(*client));
+    client = new socket_t;
     if(!client)
         goto error;
+    memset(client, 0, sizeof(socket_t));
 
     client->type = serv->type;
     client->addr_len = sizeof(struct sockaddr_storage);

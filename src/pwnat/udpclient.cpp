@@ -212,7 +212,7 @@ int udpclient(int argc, char* argv[])
         {
             for(i = 0; i < LIST_LEN(clients); i++)
             {
-                client = list_get_at(clients, i);
+                client = (client_t*)list_get_at(clients, i);
 
                 ret = client_check_and_resend(client, curr_time);
                 if(ret == -2)
@@ -256,7 +256,7 @@ int udpclient(int argc, char* argv[])
             }
             else
             {
-                client2 = list_add(conn_clients, client);
+                client2 = (client_t*)list_add(conn_clients, client);
                 client_free(client);
                 client = NULL;
                 
@@ -276,7 +276,7 @@ int udpclient(int argc, char* argv[])
         /* Check for pending handshakes from UDP connection */
         for(i = 0; i < LIST_LEN(conn_clients) && num_fds > 0; i++)
         {
-            client = list_get_at(conn_clients, i);
+            client = (client_t*)list_get_at(conn_clients, i);
             
             if(client_udp_fd_isset(client, &read_fds))
             {
@@ -296,7 +296,7 @@ int udpclient(int argc, char* argv[])
                 }
                 else
                 {
-                    client = list_add(clients, client);
+                    client = (client_t*)list_add(clients, client);
                     list_delete_at(conn_clients, i);
                     client_remove_udp_fd_from_set(client, &read_fds);
                     i--;
@@ -307,7 +307,7 @@ int udpclient(int argc, char* argv[])
         /* Check if data is ready from any of the clients */
         for(i = 0; i < LIST_LEN(clients) && num_fds > 0; i++)
         {
-            client = list_get_at(clients, i);
+            client = (client_t*)list_get_at(clients, i);
 
             /* Check for UDP data */
             if(client_udp_fd_isset(client, &read_fds))
@@ -375,7 +375,7 @@ void disconnect_and_remove_client(uint16_t id, list_t *clients, fd_set *fds)
 {
     client_t *c;
 
-    c = list_get(clients, &id);
+    c = (client_t*)list_get(clients, &id);
     if(!c)
         return;
 

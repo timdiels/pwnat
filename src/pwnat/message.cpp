@@ -93,7 +93,7 @@ int msg_send_hello(socket_t *to, char *host, char *port, uint16_t req_id)
     str_len = strlen(host) + strlen(port) + 2;
     len = str_len + sizeof(req_id);
 
-    data = malloc(len);
+    data = new char[len];
     if(!data)
         return -1;
 

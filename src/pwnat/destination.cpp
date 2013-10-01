@@ -29,9 +29,10 @@ destination_t *destination_create(const char *address)
     destination_t *dst;
     char *cp;
 
-    dst = calloc(sizeof(destination_t), 1);
+    dst = new destination_t;
     if (!dst)
         goto fail;
+    memset(dst, 0, sizeof(destination_t));
 
     dst->data = strdup(address);
     if (!dst->data)
@@ -71,9 +72,10 @@ destination_t *destination_copy(destination_t *dst, destination_t *src, size_t l
     host_len = src->host ? strlen(src->host) : 0;
     port_len = src->port ? strlen(src->port) : 0;
 
-    dst->data = calloc(host_len + port_len + 2, 1);
+    dst->data = new char[host_len + port_len + 2];
     if (!dst->data)
         return NULL;
+    memset(dst->data, 0, host_len + port_len + 2);
 
     if (host_len > 0)
     {

@@ -47,9 +47,10 @@ client_t *client_create(uint16_t id, socket_t *tcp_sock, socket_t *udp_sock,
 {
     client_t *c = NULL;
 
-    c = calloc(1, sizeof(client_t));
+    c = new client_t;
     if(!c)
         goto error;
+    memset(c, 0, sizeof(client_t));
     
     c->id = id;
     c->tcp_sock = sock_copy(tcp_sock);
