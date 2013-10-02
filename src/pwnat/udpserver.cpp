@@ -17,9 +17,9 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <string>
+#include <vector>
+#include <algorithm>
 #include <signal.h>
 
 #ifndef WIN32
@@ -31,12 +31,13 @@
 #endif
 
 #include "common.h"
-#include "list.h"
 #include "client.h"
 #include "message.h"
 #include "socket.h"
 #include "destination.h"
 #include "packet.h"
+
+using namespace std;
 
 extern int debug_level;
 extern int ipver;
@@ -45,12 +46,12 @@ static int next_client_id = 1;
 
 /* internal functions */
 static int handle_message(uint16_t id, uint8_t msg_type, char *data,
-                          int data_len, socket_t *from, list_t *clients,
+                          int data_len, socket_t *from, vector<client_t*> *clients,
                           fd_set *client_fds,
-                          list_t *allowed_destinations, char *port);
-static int destination_allowed(list_t *allowed_destinations,
+                          vector<destination_t*> *allowed_destinations, char *port);
+static int destination_allowed(vector<destination_t*> *allowed_destinations,
                                const char *host, const char *port);
-static void disconnect_and_remove_client(uint16_t id, list_t *clients,
+static void disconnect_and_remove_client(uint16_t id, vector<client_t*> *clients,
                                          fd_set *fds);
 static void signal_handler(int sig);
 
@@ -64,8 +65,8 @@ int udpserver(int argc, char *argv[])
     char port_str[ADDRSTRLEN];
     char addrstr[ADDRSTRLEN];
     
-    list_t *clients = NULL;
-    list_t *allowed_destinations = NULL;
+    vector<client_t*> *clients = NULL;
+    vector<destination_t*> *allowed_destinations = NULL;
     socket_t *udp_sock = NULL;
     socket_t *udp_from = NULL;
     char data[MSG_MAX_LEN];
@@ -146,28 +147,19 @@ int udpserver(int argc, char *argv[])
     /* Build allowed destination list */
     if (argc > allowed_start)
     {
-        allowed_destinations = list_create(sizeof(destination_t),
-                                           p_destination_cmp,
-                                           p_destination_copy,
-                                           p_destination_free);
-        if (!allowed_destinations)
-            goto done;
+        allowed_destinations = new vector<destination_t*>;
         for (i = allowed_start; i < argc; i++)
         {
             destination_t *dst = destination_create(argv[i]);
             if (!dst)
                 goto done;
-            if (!list_add(allowed_destinations, dst))
-                goto done;
+            allowed_destinations->push_back(dst);
             destination_free(dst);
         }
     }
 
     /* Create an empty list for the clients */
-    clients = list_create(sizeof(client_t), p_client_cmp, p_client_copy,
-                          p_client_free);
-    if(!clients)
-        goto done;
+    clients = new vector<client_t*>;
 
     /* Get info about localhost IP */
 	if (!(strlen(host_str)>0))
@@ -286,9 +278,9 @@ int udpserver(int argc, char *argv[])
            data during the timeout period */
         if(timercmp(&curr_time, &check_time, >))
         {
-            for(i = 0; i < LIST_LEN(clients); i++)
+            for(i = 0; i < static_cast<int>(clients->size()); i++)
             {
-                client = (client_t*)list_get_at(clients, i);
+                client = clients->at(i);
 
                 if(client_timed_out(client, curr_time))
                 {
@@ -332,9 +324,9 @@ int udpserver(int argc, char *argv[])
         }
 
         /* Go through all the clients and get any TCP data that is ready */
-        for(i = 0; i < LIST_LEN(clients) && num_fds > 0; i++)
+        for(i = 0; i < static_cast<int>(clients->size()) && num_fds > 0; i++)
         {
-            client = (client_t*)list_get_at(clients, i);
+            client = clients->at(i);
 
             if(client_tcp_fd_isset(client, &read_fds))
             {
@@ -365,10 +357,14 @@ int udpserver(int argc, char *argv[])
   done:
     if(debug_level >= DEBUG_LEVEL1)
         printf("Cleaning up...\n");
-    if(allowed_destinations)
-        list_free(allowed_destinations);
-    if(clients)
-        list_free(clients);
+    if(allowed_destinations) {
+        delete allowed_destinations;
+        allowed_destinations = nullptr;
+    }
+    if(clients) {
+        delete clients;
+        clients = nullptr;
+    }
     if(udp_sock)
     {
         sock_close(udp_sock);
@@ -386,23 +382,24 @@ int udpserver(int argc, char *argv[])
  * Closes the client's TCP socket (not UDP, since it is shared) and remove the
  * client from the fd set and client list.
  */
-void disconnect_and_remove_client(uint16_t id, list_t *clients, fd_set *fds)
+void disconnect_and_remove_client(uint16_t id, vector<client_t*> *clients, fd_set *fds)
 {
     client_t *c;
 
     if(id == 0)
         return;
     
-    c = (client_t*)list_get(clients, &id);
-    if(!c)
+    auto c_it = find(clients->begin(), clients->end(), (client_t*)&id);
+    if(c_it == clients->end())
         return;
+    c = *c_it;
 
     if(debug_level >= DEBUG_LEVEL1)
         printf("Client %d disconnected.\n", CLIENT_ID(c));
     
     client_remove_tcp_fd_from_set(c, fds);
     client_disconnect_tcp(c);
-    list_delete(clients, &id);
+    clients->erase(c_it);
 }
 
 /*
@@ -411,8 +408,8 @@ void disconnect_and_remove_client(uint16_t id, list_t *clients, fd_set *fds)
  * disconnected.
  */
 int handle_message(uint16_t id, uint8_t msg_type, char *data, int data_len,
-                   socket_t *from, list_t *clients, fd_set *client_fds,
-                   list_t *allowed_destinations, char *port_str)
+                   socket_t *from, vector<client_t*> *clients, fd_set *client_fds,
+                   vector<destination_t*> *allowed_destinations, char *port_str)
 {
     client_t *c = NULL;
     client_t *c2 = NULL;
@@ -421,7 +418,7 @@ int handle_message(uint16_t id, uint8_t msg_type, char *data, int data_len,
     
     if(id != 0)
     {
-        c = (client_t*)list_get(clients, &id);
+        c = *find(clients->begin(), clients->end(), (client_t*)&id);
         if(!c)
             return -1;
     }
@@ -481,7 +478,8 @@ int handle_message(uint16_t id, uint8_t msg_type, char *data, int data_len,
             sock_free(tcp_sock);
             ERROR_GOTO(c == NULL, "Error creating client", error);
 
-            c2 = (client_t*) list_add(clients, c);
+            clients->push_back(c);
+            c2 = c;
             ERROR_GOTO(c2 == NULL, "Error adding client to list", error);
 
             if(debug_level >= DEBUG_LEVEL1)
@@ -495,7 +493,6 @@ int handle_message(uint16_t id, uint8_t msg_type, char *data, int data_len,
             /* Send the Hello ACK message if created client successfully */
             client_send_helloack(c2, req_id);
             client_reset_keepalive(c2);
-            client_free(c);
             
             break;
         }
@@ -538,7 +535,7 @@ int handle_message(uint16_t id, uint8_t msg_type, char *data, int data_len,
     return -1;
 }
 
-int destination_allowed(list_t *allowed_destinations,
+int destination_allowed(vector<destination_t*> *allowed_destinations,
                         const char *host, const char *port)
 {
     int i;
@@ -546,9 +543,9 @@ int destination_allowed(list_t *allowed_destinations,
     if (!allowed_destinations)
         return 1;
 
-    for (i = 0; i < LIST_LEN(allowed_destinations); i++)
+    for (i = 0; i < static_cast<int>(allowed_destinations->size()); i++)
     {
-        destination_t *dst = (destination_t*)list_get_at(allowed_destinations, i);
+        destination_t *dst = allowed_destinations->at(i);
         if ((!dst->host || !strcmp(dst->host, host))
              && (!dst->port || !strcmp(dst->port, port)))
             return 1;

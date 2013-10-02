@@ -17,9 +17,9 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <string>
+#include <vector>
+#include <algorithm>
 #include <signal.h>
 #include <time.h>
 #include <sys/types.h>
@@ -45,6 +45,8 @@
 #include "client.h"
 #include "list.h"
 
+using namespace std;
+
 extern int debug_level;
 extern int ipver;
 static int running = 1;
@@ -54,7 +56,7 @@ static uint16_t next_req_id;
 /* internal functions */
 static int handle_message(client_t *c, uint16_t id, uint8_t msg_type,
                           char *data, int data_len);
-static void disconnect_and_remove_client(uint16_t id, list_t *clients,
+static void disconnect_and_remove_client(uint16_t id, vector<client_t*> *clients,
                                          fd_set *fds);
 static void signal_handler(int sig);
 
@@ -74,8 +76,8 @@ bool isnumber(const char* str) {
 int udpclient(int argc, char* argv[])
 {
     char *lhost, *lport, *phost, *pport, *rhost, *rport;
-    list_t *clients;
-    list_t *conn_clients;
+    vector<client_t*> *clients;
+    vector<client_t*> *conn_clients;
     client_t *client;
     client_t *client2;
     socket_t *tcp_serv = NULL;
@@ -151,14 +153,10 @@ int udpclient(int argc, char* argv[])
     next_req_id = rand() % 0xffff;
     
     /* Create an empty list for the clients */
-    clients = list_create(sizeof(client_t), p_client_cmp, p_client_copy,
-                          p_client_free);
-    ERROR_GOTO(clients == NULL, "Error creating clients list.", done);
+    clients = new vector<client_t*>;
 
     /* Create and empty list for the connecting clients */
-    conn_clients = list_create(sizeof(client_t), p_client_cmp, p_client_copy,
-                               p_client_free);
-    ERROR_GOTO(conn_clients == NULL, "Error creating clients list.", done);
+    conn_clients = new vector<client_t*>;
 
     /* Create a TCP server socket to listen for incoming connections */
     tcp_serv = sock_create(lhost, lport, ipver, SOCK_TYPE_TCP, 1, 1);
@@ -208,9 +206,9 @@ int udpclient(int argc, char* argv[])
            data during the timeout period */
         if(timercmp(&curr_time, &check_time, >))
         {
-            for(i = 0; i < LIST_LEN(clients); i++)
+            for(i = 0; i < static_cast<int>(clients->size()); i++)
             {
-                client = (client_t*)list_get_at(clients, i);
+                client = clients->at(i);
 
                 ret = client_check_and_resend(client, curr_time);
                 if(ret == -2)
@@ -254,9 +252,8 @@ int udpclient(int argc, char* argv[])
             }
             else
             {
-                client2 = (client_t*)list_add(conn_clients, client);
-                client_free(client);
-                client = NULL;
+                conn_clients->push_back(client);
+                client2 = client;
                 
                 client_send_hello(client2, rhost, rport, CLIENT_ID(client2));
                 client_add_tcp_fd_to_set(client2, &client_fds);
@@ -272,9 +269,9 @@ int udpclient(int argc, char* argv[])
         }
 
         /* Check for pending handshakes from UDP connection */
-        for(i = 0; i < LIST_LEN(conn_clients) && num_fds > 0; i++)
+        for(i = 0; i < static_cast<int>(conn_clients->size()) && num_fds > 0; i++)
         {
-            client = (client_t*)list_get_at(conn_clients, i);
+            client = conn_clients->at(i);
             
             if(client_udp_fd_isset(client, &read_fds))
             {
@@ -294,8 +291,8 @@ int udpclient(int argc, char* argv[])
                 }
                 else
                 {
-                    client = (client_t*)list_add(clients, client);
-                    list_delete_at(conn_clients, i);
+                    clients->push_back(client);
+                    conn_clients->erase(conn_clients->begin() + i);
                     client_remove_udp_fd_from_set(client, &read_fds);
                     i--;
                 }
@@ -303,9 +300,9 @@ int udpclient(int argc, char* argv[])
         }
 
         /* Check if data is ready from any of the clients */
-        for(i = 0; i < LIST_LEN(clients) && num_fds > 0; i++)
+        for(i = 0; i < static_cast<int>(clients->size()) && num_fds > 0; i++)
         {
-            client = (client_t*)list_get_at(clients, i);
+            client = clients->at(i);
 
             /* Check for UDP data */
             if(client_udp_fd_isset(client, &read_fds))
@@ -358,8 +355,10 @@ int udpclient(int argc, char* argv[])
         sock_close(udp_sock);
         sock_free(udp_sock);
     }
-    if(clients)
-        list_free(clients);
+    if(clients) {
+        delete clients;
+        clients = nullptr;
+    }
     if(debug_level >= DEBUG_LEVEL1)
         printf("Goodbye.\n");
     return 0;
@@ -369,13 +368,14 @@ int udpclient(int argc, char* argv[])
  * Closes the TCP and UDP connections for the client and remove its stuff from
  * the lists.
  */
-void disconnect_and_remove_client(uint16_t id, list_t *clients, fd_set *fds)
+void disconnect_and_remove_client(uint16_t id, vector<client_t*> *clients, fd_set *fds)
 {
     client_t *c;
 
-    c = (client_t*)list_get(clients, &id);
-    if(!c)
+    auto c_it = find(clients->begin(), clients->end(), (client_t*)&id);
+    if(c_it == clients->end())
         return;
+    c = *c_it;
 
     client_send_goodbye(c);
 
@@ -386,7 +386,7 @@ void disconnect_and_remove_client(uint16_t id, list_t *clients, fd_set *fds)
     client_remove_tcp_fd_from_set(c, fds);
     client_disconnect_tcp(c);
     client_disconnect_udp(c);
-    list_delete(clients, &id);
+    clients->erase(c_it);
 }
 
 /*
