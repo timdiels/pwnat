@@ -21,7 +21,6 @@
 #include <vector>
 #include <algorithm>
 #include <signal.h>
-#include <time.h>
 #include <sys/types.h>
 
 #ifndef WIN32
@@ -38,19 +37,18 @@
 #include "gettimeofday.h"
 #endif
 
+#include "TCPListener.h"
 #include "common.h"
 #include "message.h"
 #include "socket.h"
 #include "packet.h"
 #include "client.h"
-#include "list.h"
 
 using namespace std;
 
 extern int debug_level;
 extern int ipver;
 static int running = 1;
-static uint16_t next_req_id;
 
 
 /* internal functions */
@@ -76,32 +74,25 @@ bool isnumber(const char* str) {
 int udpclient(int argc, char* argv[])
 {
     char *lhost, *lport, *phost, *pport, *rhost, *rport;
-    vector<client_t*> *clients;
-    vector<client_t*> *conn_clients;
-    client_t *client;
-    client_t *client2;
-    socket_t *tcp_serv = NULL;
-    socket_t *tcp_sock = NULL;
-    socket_t *udp_sock = NULL;
     char data[MSG_MAX_LEN];
-    char addrstr[ADDRSTRLEN];
     char pport_s[6] = "2222";
     
     struct timeval curr_time;
     struct timeval check_time;
     struct timeval check_interval;
     struct timeval timeout;
-    fd_set client_fds;
-    fd_set read_fds;
+
+    // tmp vars
+    socket_t *udp_sock = NULL;
+    client_t *client;
     uint16_t tmp_id;
     uint8_t tmp_type;
     uint16_t tmp_len;
     uint16_t tmp_req_id;
-    int num_fds;
-    
     int ret;
     int i;
 
+    //
     int icmp_sock = 0;
     int timeexc = 0;
 
@@ -148,27 +139,10 @@ int udpclient(int argc, char* argv[])
     hp = gethostbyname("3.3.3.3");
     memcpy(&dest.sin_addr, hp->h_addr, hp->h_length); 
     inet_pton(AF_INET, "3.3.3.3", &(dest.sin_addr));
- 
-    srand(time(NULL));
-    next_req_id = rand() % 0xffff;
+
+    /**/
+    TCPListener tcp_listener(lhost, lport, phost, pport, rhost, rport, ipver);
     
-    /* Create an empty list for the clients */
-    clients = new vector<client_t*>;
-
-    /* Create and empty list for the connecting clients */
-    conn_clients = new vector<client_t*>;
-
-    /* Create a TCP server socket to listen for incoming connections */
-    tcp_serv = sock_create(lhost, lport, ipver, SOCK_TYPE_TCP, 1, 1);
-    ERROR_GOTO(tcp_serv == NULL, "Error creating TCP socket.", done);
-    if(debug_level >= DEBUG_LEVEL1)
-    {
-        printf("Listening on TCP %s\n",
-               sock_get_str(tcp_serv, addrstr, sizeof(addrstr)));
-    }
-    
-    FD_ZERO(&client_fds);
-
     /* Initialize all the timers */
     timerclear(&timeout);
     check_interval.tv_sec = 0;
@@ -182,6 +156,14 @@ int udpclient(int argc, char* argv[])
         exit(1);
     }
 
+    // Clients
+    fd_set client_fds;
+    fd_set read_fds;
+    int num_fds;
+    FD_ZERO(&client_fds);
+    vector<client_t*> *clients = new vector<client_t*>;
+    vector<client_t*> *conn_clients = new vector<client_t*>;
+
     while(running)
     {
         if(!timerisset(&timeout))
@@ -194,7 +176,7 @@ int udpclient(int argc, char* argv[])
         }
 
         read_fds = client_fds;
-        FD_SET(SOCK_FD(tcp_serv), &read_fds);
+        FD_SET(SOCK_FD(tcp_listener.tcp_serv), &read_fds);
 
         ret = select(FD_SETSIZE, &read_fds, NULL, NULL, &timeout);
         PERROR_GOTO(ret < 0, "select", done);
@@ -234,40 +216,9 @@ int udpclient(int argc, char* argv[])
         if(num_fds == 0)
             continue;
 
-        /* Check if pending TCP connection to accept and create a new client
-           and UDP connection if one is ready */
-        if(FD_ISSET(SOCK_FD(tcp_serv), &read_fds))
-        {
-            tcp_sock = sock_accept(tcp_serv);            
-            udp_sock = sock_create(phost, pport, ipver,
-                                   SOCK_TYPE_UDP, 0, 1);
-
-            client = client_create(next_req_id++, tcp_sock, udp_sock, 1);
-            if(!client || !tcp_sock || !udp_sock)
-            {
-                if(tcp_sock)
-                    sock_close(tcp_sock);
-                if(udp_sock)
-                    sock_close(udp_sock);
-            }
-            else
-            {
-                conn_clients->push_back(client);
-                client2 = client;
-                
-                client_send_hello(client2, rhost, rport, CLIENT_ID(client2));
-                client_add_tcp_fd_to_set(client2, &client_fds);
-                client_add_udp_fd_to_set(client2, &client_fds);
-            }
-            
-            sock_free(tcp_sock);
-            sock_free(udp_sock);
-            tcp_sock = NULL;
-            udp_sock = NULL;
-
-            num_fds--;
-        }
-
+        /**/
+        tcp_listener.poll(conn_clients, client_fds, read_fds, num_fds);
+        
         /* Check for pending handshakes from UDP connection */
         for(i = 0; i < static_cast<int>(conn_clients->size()) && num_fds > 0; i++)
         {
@@ -345,11 +296,6 @@ int udpclient(int argc, char* argv[])
   done:
     if(debug_level >= DEBUG_LEVEL1)
         printf("Cleaning up...\n");
-    if(tcp_serv)
-    {
-        sock_close(tcp_serv);
-        sock_free(tcp_serv);
-    }
     if(udp_sock)
     {
         sock_close(udp_sock);

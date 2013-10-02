@@ -18,8 +18,9 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <stdexcept>
+#include <string>
+#include <cstring>
 #include <sys/types.h>
 
 #ifndef WIN32
@@ -32,6 +33,8 @@
 
 #include "socket.h"
 #include "common.h"
+
+using namespace std;
 
 extern int debug_level;
 
@@ -110,8 +113,8 @@ socket_t *sock_create(char *host, char *port, int ipver, int sock_type,
         free(sock);
     if(info)
         freeaddrinfo(info);
-    
-    return NULL;
+
+    throw runtime_error("Error creating socket.");
 }
 
 socket_t *sock_copy(socket_t *sock)

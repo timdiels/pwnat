@@ -19,7 +19,6 @@
 
 
 #include "common.h"
-#include "list.h"
 #include "client.h"
 #include "message.h"
 #include "socket.h"
