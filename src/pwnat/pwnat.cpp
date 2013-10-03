@@ -37,7 +37,7 @@ int opt_debug = 0;
 struct sockaddr_in remote;
 
 int debug_level = 1; //NO_DEBUG;
-int ipver = SOCK_IPV4;
+//int ipver = SOCK_IPV4;
 
 int udpclient(int argc, char *argv[]);
 int udpserver(int argc, char *argv[]);
@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
         switch(ret)
         {
             case '6':
-                ipver = SOCK_IPV6;
+                //ipver = SOCK_IPV6;
                 break;
                 
             case 's':

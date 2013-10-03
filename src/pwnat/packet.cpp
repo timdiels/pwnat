@@ -19,10 +19,6 @@
 
 
 #include "common.h"
-#include "client.h"
-#include "message.h"
-#include "socket.h"
-#include "destination.h"
 #include "packet.h"
 
 int create_listen_socket()

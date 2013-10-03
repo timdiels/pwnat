@@ -20,24 +20,14 @@
 #pragma once
 
 #include <vector>
-#include "client.h"
-#include "socket.h"
+#include <boost/asio.hpp>
 
 class TCPListener {
 public:
-    TCPListener(char *host, char *port, char* proxy_host, char* proxy_port, char *remote_host, char *remote_port, int ipver);
+    TCPListener(boost::asio::io_service&);
     ~TCPListener();
 
-    void poll(std::vector<client_t*> *conn_clients, fd_set& client_fds, fd_set& read_fds, int& num_fds);
-
-    socket_t *tcp_serv;
 private:
-    int ipver;
-    char *phost;
-    char *pport;
-    char *rhost;
-    char *rport;
-
-    uint16_t next_req_id;
+    boost::asio::ip::tcp::acceptor acceptor;
 };
 

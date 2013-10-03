@@ -29,8 +29,5 @@ typedef struct destination {
 } destination_t;
 
 destination_t *destination_create(const char *address);
-destination_t *destination_copy(destination_t *dst, destination_t *src, size_t len);
-int destination_cmp(destination_t *c1, destination_t *c2, size_t len);
-void destination_free(destination_t *c);
 
 #endif

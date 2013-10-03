@@ -17,37 +17,40 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int debug_level;
-
+/*
 #include "TCPListener.h"
 #include <cstdlib>
 #include <ctime>
 
 using namespace std;
 
-TCPListener::TCPListener(char *host, char *port, char* proxy_host, char* proxy_port, char* remote_host, char* remote_port, int ipver) 
-    : ipver(ipver), phost(proxy_host), pport(proxy_port), rhost(remote_host), rport(remote_port)
+TCPListener::TCPListener(boost::asio::io_service& io_service, char *host, char *port, char* proxy_host, char* proxy_port, char* remote_host, char* remote_port, int ipver) 
+    : acceptor(io_service, boost::asio::ip::tcp::endpoint(ipver, port), ipver(ipver), phost(proxy_host), pport(proxy_port), rhost(remote_host), rport(remote_port)
 {
-    /* Create a TCP server socket to listen for incoming connections */
-    tcp_serv = sock_create(host, port, ipver, SOCK_TYPE_TCP, 1, 1);
-    if(debug_level >= DEBUG_LEVEL1)
-    {
-        char addrstr[ADDRSTRLEN];
-        printf("Listening on TCP %s\n", sock_get_str(tcp_serv, addrstr, sizeof(addrstr)));
-    }
-
-    srand(time(0));
-    next_req_id = rand() % 0xffff;
 }
 
 TCPListener::~TCPListener() {
-    sock_close(tcp_serv);
-    sock_free(tcp_serv);
 }
 
-/* Check if pending TCP connection to accept and create a new client
-   and UDP connection if one is ready */
-void TCPListener::poll(vector<client_t*> *conn_clients, fd_set& client_fds, fd_set& read_fds, int& num_fds) {
+void TCPListener::start_accept() {
+    TCPClient::pointer new_connection = tcp_connection::create(acceptor.get_io_service());
+    auto callback = boost::bind(&TCPListener::handle_accept, this, new_connection, boost::asio::placeholders::error);
+    acceptor.async_accept(new_connection->socket(), callback);
+}
+
+*/
+/* create a new client and UDP connection*/
+/*
+void TCPListener::handle_accept(TCPClient::pointer new_connection, const boost::system::error_code& error) {
+    if (!error) {
+        new_connection->start();
+    }
+
+    start_accept();
+}
+
+{
+    static uint16_t next_req_id = rand() % 0xffff;
     if(FD_ISSET(SOCK_FD(tcp_serv), &read_fds))
     {
         socket_t *tcp_sock = sock_accept(tcp_serv);
@@ -76,3 +79,4 @@ void TCPListener::poll(vector<client_t*> *conn_clients, fd_set& client_fds, fd_s
         num_fds--;
     }
 }
+*/
