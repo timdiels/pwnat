@@ -63,16 +63,24 @@ public:
                 buffer.commit(bytes_received);
 
                 if (buffer.size() > 4) {
-                    auto data = boost::asio::buffer_cast<const unsigned char*>(buffer.data());
+                    auto data = boost::asio::buffer_cast<const char*>(buffer.data());
                     auto ip_hdr = reinterpret_cast<const ip*>(data);
                     assert(ip_hdr->ip_v == 4);
 
-                    if (buffer.size() >= ntohs(ip_hdr->ip_len)) {
+                    auto packet_length = ntohs(ip_hdr->ip_len);
+                    if (buffer.size() >= packet_length) {
                         assert (ip_hdr->ip_p == IPPROTO_TCP);
+
                         auto tcp_hdr = reinterpret_cast<const tcphdr*>(data + ip_hdr->ip_hl * 4);
+
                         if (ntohs(tcp_hdr->dest) == tcp_port_c) {
                             cout << "received raw" << endl;
+                            ostream ostr(&raw_to_udp_buffer);
+                            ostr.write(data, packet_length);
+                            send_raw_to_udp();
                         }
+
+                        buffer.consume(packet_length);
                     }
                 }
             }
@@ -83,34 +91,32 @@ public:
         }
     }
 
+    void send_raw_to_udp() {
+        if (raw_to_udp_buffer.size() > 0) {
+            auto callback = boost::bind(&Client::handle_send_raw_to_udp, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
+            udp_socket.async_send(raw_to_udp_buffer.data(), callback);
+        }
+    }
+
+    void handle_send_raw_to_udp(const boost::system::error_code& error, size_t bytes_transferred) {
+        if (error) {
+            cerr << "E send raw to udp" << endl;
+        }
+        else {
+            cout << "sent " << bytes_transferred << " raw to udp" << endl;
+            raw_to_udp_buffer.consume(bytes_transferred);
+            send_raw_to_udp();
+        }
+    }
+
     void receive_udp() {
         auto callback = boost::bind(&Client::handle_receive_udp, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
         udp_socket.async_receive(udp_receive_buffer, callback);
     }
 
-    void write_raw_to_udp() {
-        auto callback = boost::bind(&Client::handle_write_raw, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
-        udp_socket.async_send(raw_buffer.data(), callback);
-    }
-
     void write_udp_to_raw() {
         auto callback = boost::bind(&Client::handle_write_udp, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
         raw_socket.async_send(udp_buffer.data(), callback);
-    }
-
-    void handle_receive_raw(const boost::system::error_code& error, size_t bytes_transferred) {
-        if (error) {
-            cerr << "E receive raw" << endl;
-        }
-        else {
-            raw_buffer.commit(bytes_transferred);
-
-            
-
-            //print_hexdump(data, bytes_transferred);
-        }
-
-        //receive_raw();
     }
 
     void handle_receive_udp(const boost::system::error_code& error, size_t bytes_transferred) {
@@ -126,19 +132,6 @@ public:
         }
 
         receive_udp();
-    }
-
-    void handle_write_raw(const boost::system::error_code& error, size_t bytes_transferred) {
-        if (error) {
-            cerr << "E send raw to udp" << endl;
-        }
-        else {
-            cout << "sent raw to udp" << endl;
-            raw_buffer.consume(bytes_transferred);
-            if (raw_buffer.size() > 0) {
-                write_raw_to_udp();
-            }
-        }
     }
 
     void handle_write_udp(const boost::system::error_code& error, size_t bytes_transferred) {
@@ -162,7 +155,6 @@ protected:
     boost::asio::streambuf::mutable_buffers_type udp_receive_buffer;
 
     boost::asio::generic::raw_protocol::socket raw_socket;
-    boost::asio::streambuf raw_buffer;
 
     boost::asio::streambuf raw_to_udp_buffer;
 };
