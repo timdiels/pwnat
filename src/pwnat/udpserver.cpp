@@ -19,6 +19,7 @@
 
 #include <signal.h>
 #include <boost/asio.hpp>
+#include <boost/asio/spawn.hpp>
 #include <boost/bind.hpp>
 #include <cassert>
 #include <netinet/ip.h>
@@ -47,16 +48,39 @@ public:
         udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_c)),
         udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s));
 
-        receive_raw();
+        boost::asio::spawn(io_service, boost::bind(&Client::receive_raw, this, _1));
         receive_udp();
 
         cout << "running client" << endl;
         io_service.run();
     }
 
-    void receive_raw() {
-        auto callback = boost::bind(&Client::handle_receive_raw, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
-        raw_socket.async_receive(raw_buffer.prepare(65536), callback);
+    void receive_raw(boost::asio::yield_context yield) {
+        boost::asio::streambuf buffer;
+        while (true) {
+            try {
+                size_t bytes_received = raw_socket.async_receive(buffer.prepare(IP_MAXPACKET), yield);
+                buffer.commit(bytes_received);
+
+                if (buffer.size() > 4) {
+                    auto data = boost::asio::buffer_cast<const unsigned char*>(buffer.data());
+                    auto ip_hdr = reinterpret_cast<const ip*>(data);
+                    assert(ip_hdr->ip_v == 4);
+
+                    if (buffer.size() >= ntohs(ip_hdr->ip_len)) {
+                        assert (ip_hdr->ip_p == IPPROTO_TCP);
+                        auto tcp_hdr = reinterpret_cast<const tcphdr*>(data + ip_hdr->ip_hl * 4);
+                        if (ntohs(tcp_hdr->dest) == tcp_port_c) {
+                            cout << "received raw" << endl;
+                        }
+                    }
+                }
+            }
+            catch (std::exception& e) {
+                cerr << "Receive raw: " << e.what() << endl;
+                abort();
+            }
+        }
     }
 
     void receive_udp() {
@@ -81,33 +105,12 @@ public:
         else {
             raw_buffer.commit(bytes_transferred);
 
-            if (raw_buffer.size() == bytes_transferred) {
-            char data[IP_MAXPACKET];  // = max packet size
-            istream is(&raw_buffer);
-            is.read(data, 4);
-            ip* ip_hdr = reinterpret_cast<ip*>(data);
-            if (ip_hdr->ip_v != 4) {
-                cerr << "Not ipv4: " << ip_hdr->ip_v << endl;
-                abort();
-            }
-            is.read(data+4, ntohs(ip_hdr->ip_len) - 4);
-            if (ip_hdr->ip_p != IPPROTO_TCP) {
-                cerr << "Not TCP: " << ip_hdr->ip_p << endl;
-                abort();
-            }
+            
 
-            tcphdr* tcp_hdr = reinterpret_cast<tcphdr*>(data + ip_hdr->ip_hl * 4);
-
-            if (ntohs(tcp_hdr->dest) == tcp_port_c) {
-                cout << "received raw" << endl;
-            }
-
-                write_raw_to_udp();
-            }  // else a write is already happening
             //print_hexdump(data, bytes_transferred);
         }
 
-        receive_raw();
+        //receive_raw();
     }
 
     void handle_receive_udp(const boost::system::error_code& error, size_t bytes_transferred) {
@@ -117,7 +120,6 @@ public:
         else {
             cout << "received udp" << endl;
             udp_buffer.commit(bytes_transferred);
-            dump_back(udp_buffer, bytes_transferred);
             if (udp_buffer.size() == bytes_transferred) {
                 write_udp_to_raw();
             }  // else a write is already happening
@@ -132,7 +134,6 @@ public:
         }
         else {
             cout << "sent raw to udp" << endl;
-            dump_front(raw_buffer, bytes_transferred);
             raw_buffer.consume(bytes_transferred);
             if (raw_buffer.size() > 0) {
                 write_raw_to_udp();
@@ -146,7 +147,6 @@ public:
         }
         else {
             cout << "sent udp to raw" << endl;
-            dump_front(udp_buffer, bytes_transferred);
             udp_buffer.consume(bytes_transferred);
             if (udp_buffer.size() > 0) {
                 write_udp_to_raw();
