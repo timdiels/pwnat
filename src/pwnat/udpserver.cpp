@@ -35,21 +35,28 @@ const int udp_port_s = 22203;
 
 void signal_handler(int sig);
 
-class Packet {
+template <typename chartype, typename iptype, typename tcptype>
+class BasicPacket {
 public:
-    Packet(char* data, size_t length) : m_data(data), m_length(length)
+    BasicPacket(chartype* data) : 
+        m_data(data)
     {
+        m_length = ntohs(ip_header()->ip_len);
     }
 
-    ip* ip_header() {
-        return reinterpret_cast<ip*>(m_data);
+    iptype* ip_header() {
+        return reinterpret_cast<iptype*>(m_data);
     }
 
-    tcphdr* tcp_header() {
-        return reinterpret_cast<tcphdr*>(m_data + ip_header()->ip_hl * 4);
+    size_t ip_header_size() {
+        return ip_header()->ip_hl * 4;
     }
 
-    char* data() {
+    tcptype* tcp_header() {
+        return reinterpret_cast<tcptype*>(m_data + ip_header_size());
+    }
+
+    chartype* data() {
         return m_data;
     }
 
@@ -59,16 +66,19 @@ public:
 
 
 private:
-    char* m_data;
+    chartype* m_data;
     size_t m_length;
 };
+
+typedef BasicPacket<char, ip, tcphdr> Packet;
+typedef BasicPacket<const char, const ip, const tcphdr> ConstPacket;
 
 class NetworkPipe {
 public:
     /**
      * Push packet of given length onto pipe
      */
-    virtual void push(Packet&) = 0;
+    virtual void push(ConstPacket&) = 0;
 };
 
 /**
@@ -93,18 +103,12 @@ public:
                 buffer.commit(bytes_received);
 
                 if (buffer.size() > 4) {
-                    auto data = boost::asio::buffer_cast<const char*>(buffer.data());
-                    auto ip_hdr = reinterpret_cast<const ip*>(data);
+                    ConstPacket packet(boost::asio::buffer_cast<const char*>(buffer.data()));
 
-                    auto packet_length = ntohs(ip_hdr->ip_len);
-                    if (buffer.size() >= packet_length) {
+                    if (buffer.size() >= packet.length()) {
                         cout << m_name << ": Received packet" << endl;
-                        char packet_data[IP_MAXPACKET];
-                        Packet packet(packet_data, packet_length);
-                        memcpy(packet.data(), data, packet_length);
                         m_pipe.push(packet);
-
-                        buffer.consume(packet_length);
+                        buffer.consume(packet.length());
                     }
                 }
             }
@@ -135,7 +139,7 @@ public:
     {
     }
 
-    void push(Packet& packet) {
+    void push(ConstPacket& packet) {
         if (ntohs(packet.tcp_header()->dest) == tcp_port_c) {
             m_pipe.push(packet);
         }
@@ -146,7 +150,7 @@ private:
 };
 
 /**
- * Sends pushed packets to ipv4 socket
+ * Sends pushed packets to connected ipv4 socket
  */
 template <typename Socket>
 class Sender : public NetworkPipe {
@@ -157,7 +161,7 @@ public:
     {
     }
 
-    void push(Packet& packet) {
+    void push(ConstPacket& packet) {
         ostream ostr(&m_buffer);
         ostr.write(packet.data(), packet.length());
         send();
@@ -173,6 +177,7 @@ public:
     void handle_send(const boost::system::error_code& error, size_t bytes_transferred) {
         if (error) {
             cerr << m_name << ": error: " << error.message() << endl;
+            abort();
         }
         else {
             cout << m_name << " sent " << bytes_transferred << endl;
@@ -187,6 +192,48 @@ private:
     string m_name;
 };
 
+/**
+ * Sends pushed packets with disconnected socket to correct ip
+ */
+template <typename Socket>
+class DisconnectedSender : public NetworkPipe {
+public:
+    DisconnectedSender(Socket& socket, string name) :
+        m_socket(socket),
+        m_name(name)
+    {
+    }
+
+    void push(Packet& packet) {
+        ostream ostr(&m_buffer);
+        ostr.write(packet.data(), packet.length());
+        send();
+    }
+
+    void send() {
+        if (m_buffer.size() > 0) {
+            auto callback = boost::bind(&DisconnectedSender::handle_send, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
+            m_socket.async_send_to(m_buffer.data(), callback);
+        }
+    }
+
+    void handle_send(const boost::system::error_code& error, size_t bytes_transferred) {
+        if (error) {
+            cerr << m_name << ": error: " << error.message() << endl;
+            // when send fails we simply try sending it again, because we need to send the entire packet, or nothing
+        }
+        else {
+            cout << m_name << " sent " << bytes_transferred << endl;
+            m_buffer.consume(bytes_transferred);
+        }
+        send();
+    }
+
+private:
+    boost::asio::streambuf m_buffer;
+    Socket& m_socket;
+    string m_name;
+};
 
 
 class Client {
