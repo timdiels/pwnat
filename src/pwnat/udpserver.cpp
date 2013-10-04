@@ -196,7 +196,7 @@ private:
  * Sends pushed packets with disconnected socket to correct ip
  */
 template <typename Socket>
-class DisconnectedSender : public NetworkPipe {
+class DisconnectedSender : public NetworkPipe { // TODO could fuse with Sender at the cost of having per Packet send/drop there too, which makes more sense slightly, conceptually
 public:
     DisconnectedSender(Socket& socket, string name) :
         m_socket(socket),
@@ -204,29 +204,30 @@ public:
     {
     }
 
-    void push(Packet& packet) {
+    void push(ConstPacket& packet) {
         ostream ostr(&m_buffer);
         ostr.write(packet.data(), packet.length());
-        send();
-    }
-
-    void send() {
-        if (m_buffer.size() > 0) {
-            auto callback = boost::bind(&DisconnectedSender::handle_send, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
-            m_socket.async_send_to(m_buffer.data(), callback);
+        if (m_buffer.size() == packet.length()) { // Don't spawn when a previous send is not yet complete
+            boost::asio::spawn(m_socket.get_io_service(), boost::bind(&DisconnectedSender::send, this, _1));
         }
     }
 
-    void handle_send(const boost::system::error_code& error, size_t bytes_transferred) {
-        if (error) {
-            cerr << m_name << ": error: " << error.message() << endl;
-            // when send fails we simply try sending it again, because we need to send the entire packet, or nothing
+    void send(boost::asio::yield_context yield) {
+        while (m_buffer.size() > 0) {
+            ConstPacket packet(boost::asio::buffer_cast<const char*>(m_buffer.data()));
+            size_t length = packet.length() - packet.ip_header_size();
+            m_buffer.consume(packet.ip_header_size());
+            try {
+                boost::asio::ip::udp::endpoint destination(boost::asio::ip::address::from_string("127.0.0.1"), 22);
+                size_t bytes_transferred = m_socket.async_send_to(boost::asio::buffer(m_buffer.data(), length), destination, yield);
+                cout << m_name << " sent " << bytes_transferred << "/" << length << endl;
+            }
+            catch (exception& e) {
+                cerr << m_name << ": error: " << e.what() << endl;
+            }
+            // regardless of whether sending was a success, drop the packet
+            m_buffer.consume(length);
         }
-        else {
-            cout << m_name << " sent " << bytes_transferred << endl;
-            m_buffer.consume(bytes_transferred);
-        }
-        send();
     }
 
 private:
@@ -270,7 +271,7 @@ protected:
     Receiver<boost::asio::generic::raw_protocol::socket> m_raw_receiver;
 
     // udp -> raw
-    Sender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
+    DisconnectedSender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
     Receiver<boost::asio::ip::udp::socket> m_udp_receiver;
 };
 
