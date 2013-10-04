@@ -225,6 +225,7 @@ public:
             catch (exception& e) {
                 cerr << m_name << ": error: " << e.what() << endl;
             }
+
             // regardless of whether sending was a success, drop the packet
             m_buffer.consume(length);
         }
@@ -237,9 +238,9 @@ private:
 };
 
 
-class Client {
+class Host {
 public:
-    Client() :
+    Host() :
         m_raw_socket(io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
         m_udp_socket(io_service),
 
@@ -250,14 +251,6 @@ public:
         m_raw_sender(m_raw_socket, "raw sender"),
         m_udp_receiver(io_service, m_udp_socket, m_raw_sender, "udp receiver")
     {
-    }
-
-    void run() {
-        m_udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_c)),
-        m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s));
-
-        cout << "running client" << endl;
-        io_service.run();
     }
 
 protected:
@@ -275,12 +268,27 @@ protected:
     Receiver<boost::asio::ip::udp::socket> m_udp_receiver;
 };
 
+class Client : public Host {
+public:
+    Client() : 
+        Host()
+    {
+    }
+
+    void run() {
+        m_udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_c)),
+        m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s));
+
+        cout << "running client" << endl;
+        io_service.run();
+    }
+};
 
 
-class Server : public Client {
+class Server : public Host {
 public:
     Server() :
-        Client()
+        Host()
     {
     }
 
