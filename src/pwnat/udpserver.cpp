@@ -75,13 +75,14 @@ public:
  * Receives from ipv4 socket and pushes to a NetworkPipe
  */
 template <typename Socket>
-class Packetizer { // TODO extract filtering as this only needs to happen in raw -> udp direction // TODO rename Receiver
+class Receiver {
 public:
-    Packetizer(boost::asio::io_service& io_service, Socket& socket, NetworkPipe& pipe) : 
+    Receiver(boost::asio::io_service& io_service, Socket& socket, NetworkPipe& pipe, string name) : 
         m_socket(socket),
-        m_pipe(pipe)
+        m_pipe(pipe),
+        m_name(name)
     {
-        boost::asio::spawn(io_service, boost::bind(&Packetizer::receive, this, _1));
+        boost::asio::spawn(io_service, boost::bind(&Receiver::receive, this, _1));
     }
 
     void receive(boost::asio::yield_context yield) {
@@ -97,9 +98,7 @@ public:
 
                     auto packet_length = ntohs(ip_hdr->ip_len);
                     if (buffer.size() >= packet_length) {
-                        assert (ip_hdr->ip_p == IPPROTO_TCP);
-
-                        cout << "Pushing received packet" << endl;
+                        cout << m_name << ": Received packet" << endl;
                         char packet_data[IP_MAXPACKET];
                         Packet packet(packet_data, packet_length);
                         memcpy(packet.data(), data, packet_length);
@@ -110,7 +109,7 @@ public:
                 }
             }
             catch (std::exception& e) {
-                cerr << "Receive raw: " << e.what() << endl;
+                cerr << m_name << ": error: " << e.what() << endl;
                 abort();
             }
         }
@@ -119,6 +118,7 @@ public:
 private:
     Socket& m_socket;
     NetworkPipe& m_pipe;
+    string m_name;
 };
 
 /**
@@ -151,38 +151,40 @@ private:
 template <typename Socket>
 class Sender : public NetworkPipe {
 public:
-    Sender(Socket& socket) :
-        udp_socket(socket)
+    Sender(Socket& socket, string name) :
+        m_socket(socket),
+        m_name(name)
     {
     }
 
     void push(Packet& packet) {
-        ostream ostr(&raw_to_udp_buffer);
+        ostream ostr(&m_buffer);
         ostr.write(packet.data(), packet.length());
-        send_raw_to_udp();
+        send();
     }
 
-    void send_raw_to_udp() {
-        if (raw_to_udp_buffer.size() > 0) {
-            auto callback = boost::bind(&Sender::handle_send_raw_to_udp, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
-            udp_socket.async_send(raw_to_udp_buffer.data(), callback);
+    void send() {
+        if (m_buffer.size() > 0) {
+            auto callback = boost::bind(&Sender::handle_send, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
+            m_socket.async_send(m_buffer.data(), callback);
         }
     }
 
-    void handle_send_raw_to_udp(const boost::system::error_code& error, size_t bytes_transferred) {
+    void handle_send(const boost::system::error_code& error, size_t bytes_transferred) {
         if (error) {
-            cerr << "E send raw to udp" << endl;
+            cerr << m_name << ": error: " << error.message() << endl;
         }
         else {
-            cout << "sent " << bytes_transferred << " raw to udp" << endl;
-            raw_to_udp_buffer.consume(bytes_transferred);
-            send_raw_to_udp();
+            cout << m_name << " sent " << bytes_transferred << endl;
+            m_buffer.consume(bytes_transferred);
+            send();
         }
     }
 
 private:
-    boost::asio::streambuf raw_to_udp_buffer;
-    Socket& udp_socket;
+    boost::asio::streambuf m_buffer;
+    Socket& m_socket;
+    string m_name;
 };
 
 
@@ -191,75 +193,38 @@ class Client {
 public:
     Client() :
         m_raw_socket(io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
-        udp_socket(io_service),
-        m_udp_sender(udp_socket),
+        m_udp_socket(io_service),
+
+        m_udp_sender(m_udp_socket, "udp sender"),
         m_filter(m_udp_sender),
-        raw_packetizer(io_service, m_raw_socket, m_filter),
-        udp_receive_buffer(udp_buffer.prepare(1024))
+        m_raw_receiver(io_service, m_raw_socket, m_filter, "raw receiver"),
+
+        m_raw_sender(m_raw_socket, "raw sender"),
+        m_udp_receiver(io_service, m_udp_socket, m_raw_sender, "udp receiver")
     {
     }
 
     void run() {
-        udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_c)),
-        udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s));
-
-        receive_udp();
+        m_udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_c)),
+        m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s));
 
         cout << "running client" << endl;
         io_service.run();
     }
 
-    void receive_udp() {
-        auto callback = boost::bind(&Client::handle_receive_udp, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
-        udp_socket.async_receive(udp_receive_buffer, callback);
-    }
-
-    void write_udp_to_raw() {
-        auto callback = boost::bind(&Client::handle_write_udp, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
-        m_raw_socket.async_send(udp_buffer.data(), callback);
-    }
-
-    void handle_receive_udp(const boost::system::error_code& error, size_t bytes_transferred) {
-        if (error) {
-            cerr << "E receive udp" << endl;
-        }
-        else {
-            cout << "received udp" << endl;
-            udp_buffer.commit(bytes_transferred);
-            if (udp_buffer.size() == bytes_transferred) {
-                write_udp_to_raw();
-            }  // else a write is already happening
-        }
-
-        receive_udp();
-    }
-
-    void handle_write_udp(const boost::system::error_code& error, size_t bytes_transferred) {
-        if (error) {
-            cerr << "E send udp to raw" << endl;
-        }
-        else {
-            cout << "sent udp to raw" << endl;
-            udp_buffer.consume(bytes_transferred);
-            if (udp_buffer.size() > 0) {
-                write_udp_to_raw();
-            }
-        }
-    }
-
 protected:
     boost::asio::io_service io_service;
     boost::asio::generic::raw_protocol::socket m_raw_socket;
-    boost::asio::ip::udp::socket udp_socket;
+    boost::asio::ip::udp::socket m_udp_socket;
 
+    // raw -> udp
     Sender<boost::asio::ip::udp::socket> m_udp_sender;
-
     TCPPortFilter m_filter;
+    Receiver<boost::asio::generic::raw_protocol::socket> m_raw_receiver;
 
-    Packetizer<boost::asio::generic::raw_protocol::socket> raw_packetizer;
-
-    boost::asio::streambuf udp_buffer; // udp to raw buffer
-    boost::asio::streambuf::mutable_buffers_type udp_receive_buffer;
+    // udp -> raw
+    Sender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
+    Receiver<boost::asio::ip::udp::socket> m_udp_receiver;
 };
 
 
@@ -272,13 +237,9 @@ public:
     }
 
     void run() {
-        udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_s));
-
-        udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_c));
-        //raw_socket.connect(boost::asio::generic::raw_protocol::endpoint(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22)));
-
-        //receive_raw();
-        receive_udp();
+        // TODO needs filter to be of tcp_port_s, will also have different rewrite system than Client
+        m_udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_s));
+        m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_c));
 
         cout << "running server" << endl;
         io_service.run();
