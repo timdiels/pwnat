@@ -28,8 +28,6 @@
 
 using namespace std;
 
-const int tcp_port_c = 44401;
-const int tcp_port_s = 44403;
 const int udp_port_c = 22201;
 const int udp_port_s = 22203;
 
@@ -132,21 +130,23 @@ class TCPPortFilter : public NetworkPipe {
 public:
 
     /**
-     * Only let packets through that match port
+     * Only let packets through that match given port
      */
-    TCPPortFilter(NetworkPipe& pipe) :
-        m_pipe(pipe)
+    TCPPortFilter(NetworkPipe& pipe, int port) :
+        m_pipe(pipe),
+        m_port(port)
     {
     }
 
     void push(ConstPacket& packet) {
-        if (ntohs(packet.tcp_header()->dest) == tcp_port_c) {
+        if (ntohs(packet.tcp_header()->dest) == m_port) {
             m_pipe.push(packet);
         }
     }
 
 private:
     NetworkPipe& m_pipe;
+    int m_port;
 };
 
 /**
@@ -240,12 +240,12 @@ private:
 
 class Host {
 public:
-    Host() :
+    Host(int tcp_port) :
         m_raw_socket(io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
         m_udp_socket(io_service),
 
         m_udp_sender(m_udp_socket, "udp sender"),
-        m_filter(m_udp_sender),
+        m_filter(m_udp_sender, tcp_port),
         m_raw_receiver(io_service, m_raw_socket, m_filter, "raw receiver"),
 
         m_raw_sender(m_raw_socket, "raw sender"),
@@ -271,7 +271,7 @@ protected:
 class Client : public Host {
 public:
     Client() : 
-        Host()
+        Host(tcp_port_c)
     {
     }
 
@@ -282,13 +282,16 @@ public:
         cout << "running client" << endl;
         io_service.run();
     }
+
+private:
+    const int tcp_port_c = 44401;
 };
 
 
 class Server : public Host {
 public:
     Server() :
-        Host()
+        Host(tcp_port_s)
     {
     }
 
@@ -300,6 +303,9 @@ public:
         cout << "running server" << endl;
         io_service.run();
     }
+
+private:
+    const int tcp_port_s = 44403;
 };
 
 
