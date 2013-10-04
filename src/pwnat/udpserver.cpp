@@ -35,12 +35,40 @@ const int udp_port_s = 22203;
 
 void signal_handler(int sig);
 
+class Packet {
+public:
+    Packet(char* data, size_t length) : m_data(data), m_length(length)
+    {
+    }
+
+    ip* ip_header() {
+        return reinterpret_cast<ip*>(m_data);
+    }
+
+    tcphdr* tcp_header() {
+        return reinterpret_cast<tcphdr*>(m_data + ip_header()->ip_hl * 4);
+    }
+
+    char* data() {
+        return m_data;
+    }
+
+    size_t length() {
+        return m_length;
+    }
+
+
+private:
+    char* m_data;
+    size_t m_length;
+};
+
 class NetworkPipe {
 public:
     /**
      * Push packet of given length onto pipe
      */
-    virtual void push(char* packet, size_t length) = 0;
+    virtual void push(Packet&) = 0;
 };
 
 /**
@@ -66,21 +94,16 @@ public:
                 if (buffer.size() > 4) {
                     auto data = boost::asio::buffer_cast<const char*>(buffer.data());
                     auto ip_hdr = reinterpret_cast<const ip*>(data);
-                    assert(ip_hdr->ip_v == 4);
 
                     auto packet_length = ntohs(ip_hdr->ip_len);
                     if (buffer.size() >= packet_length) {
                         assert (ip_hdr->ip_p == IPPROTO_TCP);
 
-                        auto tcp_hdr = reinterpret_cast<const tcphdr*>(data + ip_hdr->ip_hl * 4);
-
-                        if (ntohs(tcp_hdr->dest) == tcp_port_c) {
-                            cout << "Pushing received packet" << endl;
-                            char packet[IP_MAXPACKET];
-                            memcpy(packet, data, packet_length);
-                            print_hexdump(packet, packet_length);
-                            m_pipe.push(packet, packet_length);
-                        }
+                        cout << "Pushing received packet" << endl;
+                        char packet_data[IP_MAXPACKET];
+                        Packet packet(packet_data, packet_length);
+                        memcpy(packet.data(), data, packet_length);
+                        m_pipe.push(packet);
 
                         buffer.consume(packet_length);
                     }
@@ -99,6 +122,30 @@ private:
 };
 
 /**
+ * Filter packets by port
+ */
+class TCPPortFilter : public NetworkPipe {
+public:
+
+    /**
+     * Only let packets through that match port
+     */
+    TCPPortFilter(NetworkPipe& pipe) :
+        m_pipe(pipe)
+    {
+    }
+
+    void push(Packet& packet) {
+        if (ntohs(packet.tcp_header()->dest) == tcp_port_c) {
+            m_pipe.push(packet);
+        }
+    }
+
+private:
+    NetworkPipe& m_pipe;
+};
+
+/**
  * Sends pushed packets to ipv4 socket
  */
 template <typename Socket>
@@ -109,9 +156,9 @@ public:
     {
     }
 
-    void push(char* packet, size_t length) {
+    void push(Packet& packet) {
         ostream ostr(&raw_to_udp_buffer);
-        ostr.write(packet, length);
+        ostr.write(packet.data(), packet.length());
         send_raw_to_udp();
     }
 
@@ -146,7 +193,8 @@ public:
         m_raw_socket(io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
         udp_socket(io_service),
         m_udp_sender(udp_socket),
-        raw_packetizer(io_service, m_raw_socket, m_udp_sender),
+        m_filter(m_udp_sender),
+        raw_packetizer(io_service, m_raw_socket, m_filter),
         udp_receive_buffer(udp_buffer.prepare(1024))
     {
     }
@@ -205,6 +253,8 @@ protected:
     boost::asio::ip::udp::socket udp_socket;
 
     Sender<boost::asio::ip::udp::socket> m_udp_sender;
+
+    TCPPortFilter m_filter;
 
     Packetizer<boost::asio::generic::raw_protocol::socket> raw_packetizer;
 
