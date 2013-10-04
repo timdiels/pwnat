@@ -132,7 +132,7 @@ public:
     /**
      * Only let packets through that match given port
      */
-    TCPPortFilter(NetworkPipe& pipe, int port) :
+    TCPPortFilter(NetworkPipe& pipe, unsigned short port) :
         m_pipe(pipe),
         m_port(port)
     {
@@ -146,7 +146,42 @@ public:
 
 private:
     NetworkPipe& m_pipe;
-    int m_port;
+    unsigned short m_port;
+};
+
+/**
+ * Rewrites source and dest ip address and tcp ports
+ */
+class Rewriter : public NetworkPipe {
+public:
+    Rewriter(NetworkPipe& pipe, boost::asio::ip::tcp::endpoint source, boost::asio::ip::tcp::endpoint destination) :
+        m_pipe(pipe),
+        m_source(source),
+        m_destination(destination)
+    {
+    }
+
+    void push(ConstPacket& packet) {
+        char data[IP_MAXPACKET];
+        memcpy(data, packet.data(), packet.length());
+        Packet mut_packet(data);
+
+        auto ip_hdr = mut_packet.ip_header();
+        memcpy(&ip_hdr->ip_src, m_source.address().to_v4().to_bytes().data(), 4);
+        memcpy(&ip_hdr->ip_dst, m_destination.address().to_v4().to_bytes().data(), 4);
+
+        auto tcp_hdr = mut_packet.tcp_header();
+        tcp_hdr->source = htons(m_source.port());
+        tcp_hdr->dest = htons(m_destination.port());
+
+        ConstPacket new_packet(mut_packet.data());
+        m_pipe.push(new_packet);
+    }
+
+private:
+    NetworkPipe& m_pipe;
+    boost::asio::ip::tcp::endpoint m_source;
+    boost::asio::ip::tcp::endpoint m_destination;
 };
 
 /**
@@ -240,16 +275,17 @@ private:
 
 class Host {
 public:
-    Host(int tcp_port) :
+    Host(boost::asio::ip::tcp::endpoint source, boost::asio::ip::tcp::endpoint destination) :
         m_raw_socket(io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
         m_udp_socket(io_service),
 
         m_udp_sender(m_udp_socket, "udp sender"),
-        m_filter(m_udp_sender, tcp_port),
+        m_filter(m_udp_sender, source.port()),
         m_raw_receiver(io_service, m_raw_socket, m_filter, "raw receiver"),
 
         m_raw_sender(m_raw_socket, "raw sender"),
-        m_udp_receiver(io_service, m_udp_socket, m_raw_sender, "udp receiver")
+        m_rewriter(m_raw_sender, source, destination),
+        m_udp_receiver(io_service, m_udp_socket, m_rewriter, "udp receiver")
     {
     }
 
@@ -265,13 +301,15 @@ protected:
 
     // udp -> raw
     DisconnectedSender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
+    Rewriter m_rewriter;
     Receiver<boost::asio::ip::udp::socket> m_udp_receiver;
 };
 
 class Client : public Host {
 public:
     Client() : 
-        Host(tcp_port_c)
+        Host(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), tcp_port_c),
+             boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22))
     {
     }
 
@@ -284,19 +322,19 @@ public:
     }
 
 private:
-    const int tcp_port_c = 44401;
+    const unsigned short tcp_port_c = 44401u;
 };
 
-
+// TODO we can probably assume that upon each read exactly one packet is received, need to browse the web for that. We could switch to easier buffers too then, easier Packet formats too.
 class Server : public Host {
 public:
     Server() :
-        Host(tcp_port_s)
+        Host(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), tcp_port_s),
+             boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22))
     {
     }
 
     void run() {
-        // TODO needs filter to be of tcp_port_s, will also have different rewrite system than Client
         m_udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_s));
         m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_c));
 
@@ -305,7 +343,7 @@ public:
     }
 
 private:
-    const int tcp_port_s = 44403;
+    const unsigned short tcp_port_s = 44403u;
 };
 
 
