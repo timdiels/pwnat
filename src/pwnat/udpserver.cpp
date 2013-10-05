@@ -25,6 +25,7 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include "socket.h"
+#include "checksum.h"
 
 using namespace std;
 
@@ -173,6 +174,7 @@ public:
         auto tcp_hdr = mut_packet.tcp_header();
         tcp_hdr->source = htons(m_source.port());
         tcp_hdr->dest = htons(m_destination.port());
+        set_tcp_checksum(ip_hdr, tcp_hdr);
 
         ConstPacket new_packet(mut_packet.data());
         m_pipe.push(new_packet);
