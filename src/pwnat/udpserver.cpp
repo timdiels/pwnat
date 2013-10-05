@@ -287,6 +287,7 @@ public:
         m_rewriter(m_raw_sender, source, destination),
         m_udp_receiver(io_service, m_udp_socket, m_rewriter, "udp receiver")
     {
+        cout << source.port() << endl;
     }
 
 protected:
@@ -308,8 +309,8 @@ protected:
 class Client : public Host {
 public:
     Client() : 
-        Host(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), tcp_port_c),
-             boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22))
+        Host(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44401u),
+             boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 12345u))
     {
     }
 
@@ -320,17 +321,14 @@ public:
         cout << "running client" << endl;
         io_service.run();
     }
-
-private:
-    const unsigned short tcp_port_c = 44401u;
 };
 
 // TODO we can probably assume that upon each read exactly one packet is received, need to browse the web for that. We could switch to easier buffers too then, easier Packet formats too.
 class Server : public Host {
 public:
     Server() :
-        Host(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), tcp_port_s),
-             boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22))
+        Host(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44403u),
+             boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u))
     {
     }
 
@@ -341,9 +339,6 @@ public:
         cout << "running server" << endl;
         io_service.run();
     }
-
-private:
-    const unsigned short tcp_port_s = 44403u;
 };
 
 
