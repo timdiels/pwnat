@@ -80,18 +80,19 @@ public:
     virtual void push(ConstPacket&) = 0;
 };
 
+// TODO you can bind your raw socket to local address instead of doing TCPPortFilter, apparently
 /**
  * Receives from ipv4 socket and pushes to a NetworkPipe
  */
 template <typename Socket>
 class Receiver {
 public:
-    Receiver(boost::asio::io_service& io_service, Socket& socket, NetworkPipe& pipe, string name) : 
+    Receiver(Socket& socket, NetworkPipe& pipe, string name) : 
         m_socket(socket),
         m_pipe(pipe),
         m_name(name)
     {
-        boost::asio::spawn(io_service, boost::bind(&Receiver::receive, this, _1));
+        boost::asio::spawn(socket.get_io_service(), boost::bind(&Receiver::receive, this, _1));
     }
 
     void receive(boost::asio::yield_context yield) {
@@ -113,7 +114,7 @@ public:
             }
             catch (std::exception& e) {
                 cerr << m_name << ": error: " << e.what() << endl;
-                abort();
+                //abort();
             }
         }
     }
@@ -274,73 +275,128 @@ private:
     string m_name;
 };
 
-
-class Host {
+class TCPToUDPMapping {
 public:
-    Host(boost::asio::ip::tcp::endpoint source, boost::asio::ip::tcp::endpoint destination) :
-        m_raw_socket(io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
-        m_udp_socket(io_service),
+    /**
+     * tcp_server: endpoint of the tcp server
+     * tcp_client: endpoint of the client that connected to our tcp server
+     */
+    TCPToUDPMapping(boost::asio::io_service& io_service, DisconnectedSender<boost::asio::generic::raw_protocol::socket>& raw_sender, boost::asio::ip::tcp::endpoint tcp_server, boost::asio::ip::tcp::endpoint tcp_client) :
+        m_udp_socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_c)),
 
-        m_udp_sender(m_udp_socket, "udp sender"),
-        m_filter(m_udp_sender, source.port()),
-        m_raw_receiver(io_service, m_raw_socket, m_filter, "raw receiver"),
+        m_udp_sender(m_udp_socket, "udp sender"), // TODO next pipe last, name reeeally last
+        // TODO name + tcp client port, or no names, or name defaults to: udp sender src->dst port (let's do that latter)
 
-        m_raw_sender(m_raw_socket, "raw sender"),
-        m_rewriter(m_raw_sender, source, destination),
-        m_udp_receiver(io_service, m_udp_socket, m_rewriter, "udp receiver")
+        m_rewriter(raw_sender, tcp_server, tcp_client),
+        m_udp_receiver(m_udp_socket, m_rewriter, "udp receiver")
     {
-        cout << source.port() << endl;
+        m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s));
     }
 
-protected:
-    boost::asio::io_service io_service;
-    boost::asio::generic::raw_protocol::socket m_raw_socket;
+    NetworkPipe& udp_sender() {
+        return m_udp_sender;
+    }
+
+private:
     boost::asio::ip::udp::socket m_udp_socket;
 
-    // raw -> udp
     Sender<boost::asio::ip::udp::socket> m_udp_sender;
-    TCPPortFilter m_filter;
-    Receiver<boost::asio::generic::raw_protocol::socket> m_raw_receiver;
 
-    // udp -> raw
-    DisconnectedSender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
     Rewriter m_rewriter;
     Receiver<boost::asio::ip::udp::socket> m_udp_receiver;
 };
 
-class Client : public Host {
+class TCPToUDPRouter : public NetworkPipe {
+public:
+    TCPToUDPRouter(boost::asio::generic::raw_protocol::socket& raw_socket, boost::asio::ip::tcp::endpoint source) :
+        m_io_service(raw_socket.get_io_service()),
+        m_tcp_server(source),
+        m_raw_sender(raw_socket, "raw sender")
+    {
+    }
+
+    void push(ConstPacket& packet) {
+        u_int16_t client_port = htons(packet.tcp_header()->source);
+        if (m_mappings.find(client_port) == m_mappings.end()) {
+            cout << "New tcp client at port " << client_port << endl;
+            boost::asio::ip::tcp::endpoint tcp_client(boost::asio::ip::address::from_string("127.0.0.1"), client_port);
+            m_mappings[client_port] = new TCPToUDPMapping(m_io_service, m_raw_sender, m_tcp_server, tcp_client);
+        }
+
+        m_mappings.at(client_port)->udp_sender().push(packet);
+    }
+
+private:
+    boost::asio::io_service& m_io_service;
+    boost::asio::ip::tcp::endpoint m_tcp_server;
+    DisconnectedSender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
+
+    map<unsigned short, TCPToUDPMapping*> m_mappings;  // port -> mapping
+};
+
+class Client {
 public:
     Client() : 
-        Host(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44401u),
-             boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 12345u))
+        m_tcp_server(boost::asio::ip::address::from_string("127.0.0.1"), 44401u),
+        m_raw_socket(m_io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
+
+        m_tcp_to_udp_router(m_raw_socket, m_tcp_server),
+        m_filter(m_tcp_to_udp_router, m_tcp_server.port()),
+        m_raw_receiver(m_raw_socket, m_filter, "raw receiver")
     {
     }
 
     void run() {
-        m_udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_c)),
-        m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s));
-
         cout << "running client" << endl;
-        io_service.run();
+        m_io_service.run();
     }
+
+private:
+    boost::asio::io_service m_io_service;
+    boost::asio::ip::tcp::endpoint m_tcp_server;  // endpoint of the tcp server
+    boost::asio::generic::raw_protocol::socket m_raw_socket;
+
+    TCPToUDPRouter m_tcp_to_udp_router;
+    TCPPortFilter m_filter;
+    Receiver<boost::asio::generic::raw_protocol::socket> m_raw_receiver;
 };
 
 // TODO we can probably assume that upon each read exactly one packet is received, need to browse the web for that. We could switch to easier buffers too then, easier Packet formats too.
-class Server : public Host {
+class Server {
 public:
     Server() :
-        Host(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44403u),
-             boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u))
+        m_raw_socket(m_io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
+        m_udp_socket(m_io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_s)),
+
+        m_udp_sender(m_udp_socket, "udp sender"),
+        m_filter(m_udp_sender, 44403u),
+        m_raw_receiver(m_raw_socket, m_filter, "raw receiver"),
+
+        m_raw_sender(m_raw_socket, "raw sender"),
+        m_rewriter(m_raw_sender, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44403u), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)),
+        m_udp_receiver(m_udp_socket, m_rewriter, "udp receiver")
     {
     }
 
     void run() {
-        m_udp_socket = boost::asio::ip::udp::socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_s));
         m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_c));
 
         cout << "running server" << endl;
-        io_service.run();
+        m_io_service.run();
     }
+
+private:
+    boost::asio::io_service m_io_service;
+    boost::asio::generic::raw_protocol::socket m_raw_socket;
+    boost::asio::ip::udp::socket m_udp_socket;
+
+    Sender<boost::asio::ip::udp::socket> m_udp_sender;
+    TCPPortFilter m_filter;
+    Receiver<boost::asio::generic::raw_protocol::socket> m_raw_receiver;
+
+    DisconnectedSender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
+    Rewriter m_rewriter;
+    Receiver<boost::asio::ip::udp::socket> m_udp_receiver;
 };
 
 
