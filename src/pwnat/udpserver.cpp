@@ -24,6 +24,7 @@
 #include <cassert>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
+#include <udt/udt.h>
 #include "socket.h"
 #include "checksum.h"
 
@@ -231,6 +232,50 @@ private:
 };
 
 /**
+ * Sends pushed packets to connected UDT socket
+ */
+class UDTSender : public NetworkPipe {
+public:
+    UDTSender(UDTSOCKET socket, string name) :
+        m_new(new boost::asio::streambuf),
+        m_sending(new boost::asio::streambuf),
+        m_socket(socket),
+        m_name(name)
+    {
+    }
+
+    void push(ConstPacket& packet) {
+        // TODO lock
+        ostream ostr(m_new);
+        ostr.write(packet.data(), packet.length()); // TODO might cause reallocation, which invalidates horrifically elsewhere?
+        send(); // TODO do this asynchronously, or epoll. In any case epoll, perhaps one thread epoll eventually
+    }
+
+    void send() {
+        // Note: runs in a thread different from that of io_service handlers
+        swap(m_sending, m_new); // TODO lock
+
+        while (m_sending->size() > 0) {
+            int bytes_transferred = UDT::send(m_socket, boost::asio::buffer_cast<const char*>(m_sending->data()), m_sending->size(), 0);
+            if (bytes_transferred == UDT::ERROR) {
+                cerr << m_name << ": error: " << UDT::getlasterror().getErrorMessage() << endl;
+                abort();
+            }
+            else {
+                cout << m_name << " sent " << bytes_transferred << endl;
+                m_sending->consume(bytes_transferred);
+            }
+        }
+    }
+
+private:
+    boost::asio::streambuf* m_new;
+    boost::asio::streambuf* m_sending;
+    UDTSOCKET m_socket;
+    string m_name;
+};
+
+/**
  * Sends pushed packets with disconnected socket to correct ip
  */
 template <typename Socket>
@@ -282,15 +327,33 @@ public:
      * tcp_client: endpoint of the client that connected to our tcp server
      */
     TCPToUDPMapping(boost::asio::io_service& io_service, DisconnectedSender<boost::asio::generic::raw_protocol::socket>& raw_sender, boost::asio::ip::tcp::endpoint tcp_server, boost::asio::ip::tcp::endpoint tcp_client) :
-        m_udp_socket(io_service, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), udp_port_c)),
+        m_udp_socket(UDT::socket(AF_INET, SOCK_STREAM, 0)),
 
-        m_udp_sender(m_udp_socket, "udp sender"), // TODO next pipe last, name reeeally last
+        m_udp_sender(m_udp_socket, "udt sender"),
+        // TODO next pipe last, name reeeally last
         // TODO name + tcp client port, or no names, or name defaults to: udp sender src->dst port (let's do that latter)
 
-        m_rewriter(raw_sender, tcp_server, tcp_client),
-        m_udp_receiver(m_udp_socket, m_rewriter, "udp receiver")
+        m_rewriter(raw_sender, tcp_server, tcp_client)
+        //m_udp_receiver(m_udp_socket, m_rewriter, "udp receiver")
     {
-        m_udp_socket.connect(boost::asio::ip::udp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s));
+        assert(m_udp_socket != UDT::INVALID_SOCK); // todo exception throw
+
+        sockaddr_in localhost;
+        localhost.sin_family = AF_INET;
+        localhost.sin_addr.s_addr = inet_addr("127.0.0.1");
+        memset(&localhost.sin_zero, 0, 8);
+
+        localhost.sin_port = htons(udp_port_c);
+        if (UDT::ERROR == UDT::bind(m_udp_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
+            cerr << "client bind error: " << UDT::getlasterror().getErrorMessage() << endl;
+            abort();
+        }
+
+        localhost.sin_port = htons(udp_port_s);
+        if (UDT::ERROR == UDT::connect(m_udp_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
+            cerr << "client connect error: " << UDT::getlasterror().getErrorMessage() << endl;
+            abort();
+        }
     }
 
     NetworkPipe& udp_sender() {
@@ -298,12 +361,12 @@ public:
     }
 
 private:
-    boost::asio::ip::udp::socket m_udp_socket;
+    UDTSOCKET m_udp_socket; // TODO rename m_udt_socket
 
-    Sender<boost::asio::ip::udp::socket> m_udp_sender;
+    UDTSender m_udp_sender;
 
     Rewriter m_rewriter;
-    Receiver<boost::asio::ip::udp::socket> m_udp_receiver;
+    //Receiver<boost::asio::ip::udp::socket> m_udp_receiver;
 };
 
 class TCPToUDPRouter : public NetworkPipe {
@@ -409,6 +472,8 @@ int udpserver(int argc, char *argv[])
     try {
         signal(SIGINT, &signal_handler);
 
+        UDT::startup();
+
         // prototype code
         if (argc == 0) {
             // pretend to be client
@@ -437,6 +502,7 @@ void signal_handler(int sig)
     {
         case SIGINT:
             abort();
+            // TODO io_service.stop()
     }
 }
 
