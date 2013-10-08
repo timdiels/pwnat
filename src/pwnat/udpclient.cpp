@@ -23,8 +23,6 @@
 #include <signal.h>
 #include <sys/types.h>
 
-#include "TCPListener.h"
-
 using namespace std;
 
 static int running = 1;
