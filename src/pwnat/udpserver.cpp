@@ -36,25 +36,13 @@ const int udp_port_s = 22203;
 
 void signal_handler(int sig);
 
-template <typename chartype, typename iptype, typename tcptype>
+template <typename chartype>
 class BasicPacket {
 public:
-    BasicPacket(chartype* data) : 
-        m_data(data)
+    BasicPacket(chartype* data, size_t length) : 
+        m_data(data),
+        m_length(length)
     {
-        m_length = ntohs(ip_header()->ip_len);
-    }
-
-    iptype* ip_header() {
-        return reinterpret_cast<iptype*>(m_data);
-    }
-
-    size_t ip_header_size() {
-        return ip_header()->ip_hl * 4;
-    }
-
-    tcptype* tcp_header() {
-        return reinterpret_cast<tcptype*>(m_data + ip_header_size());
     }
 
     chartype* data() {
@@ -71,8 +59,8 @@ private:
     size_t m_length;
 };
 
-typedef BasicPacket<char, ip, tcphdr> Packet;
-typedef BasicPacket<const char, const ip, const tcphdr> ConstPacket;
+typedef BasicPacket<char> Packet;
+typedef BasicPacket<const char> ConstPacket;
 
 class NetworkPipe {
 public:
@@ -83,7 +71,7 @@ public:
 };
 
 /**
- * Receives from ipv4 socket and pushes to a NetworkPipe
+ * Receives from socket and pushes to a NetworkPipe
  */
 template <typename Socket>
 class Receiver {
@@ -97,25 +85,17 @@ public:
     }
 
     void receive(boost::asio::yield_context yield) {
-        boost::asio::streambuf buffer;
+        boost::array<char, IP_MAXPACKET> buffer;
         while (true) {
             try {
-                size_t bytes_received = m_socket.async_receive(buffer.prepare(IP_MAXPACKET), yield);
-                buffer.commit(bytes_received);
-
-                if (buffer.size() > 4) {
-                    ConstPacket packet(boost::asio::buffer_cast<const char*>(buffer.data()));
-
-                    if (buffer.size() >= packet.length()) {
-                        cout << m_name << ": Received packet" << endl;
-                        m_pipe.push(packet);
-                        buffer.consume(packet.length());
-                    }
-                }
+                size_t bytes_transferred = m_socket.async_receive(boost::asio::buffer(buffer), yield);
+                cout << m_name << " received " << bytes_transferred << endl;
+                ConstPacket packet(buffer.data(), bytes_transferred); // TODO can't we just hand it to a string object or such?
+                m_pipe.push(packet);
             }
             catch (std::exception& e) {
-                cerr << m_name << ": error: " << e.what() << endl;
-                //abort();
+                cerr << m_name << ": receive error: " << e.what() << endl;
+                abort();
             }
         }
     }
@@ -125,6 +105,7 @@ private:
     NetworkPipe& m_pipe;
     string m_name;
 };
+typedef Receiver<boost::asio::ip::tcp::socket> TCPReceiver;
 
 /**
  * Receives from UDT socket and pushes to a NetworkPipe
@@ -163,7 +144,7 @@ public:
     void push_received() {
         // TODO lock
         if (m_received.size() > 0) {
-            ConstPacket packet(boost::asio::buffer_cast<const char*>(m_received.data()));
+            ConstPacket packet(boost::asio::buffer_cast<const char*>(m_received.data()), m_received.size());
             m_pipe.push(packet);
             m_received.consume(packet.length());
         }
@@ -179,69 +160,7 @@ private:
 };
 
 /**
- * Filter packets by port
- */
-class TCPPortFilter : public NetworkPipe {
-public:
-
-    /**
-     * Only let packets through that match given port
-     */
-    TCPPortFilter(NetworkPipe& pipe, unsigned short port) :
-        m_pipe(pipe),
-        m_port(port)
-    {
-    }
-
-    void push(ConstPacket& packet) {
-        if (ntohs(packet.tcp_header()->dest) == m_port) {
-            m_pipe.push(packet);
-        }
-    }
-
-private:
-    NetworkPipe& m_pipe;
-    unsigned short m_port;
-};
-
-/**
- * Rewrites source and dest ip address and tcp ports
- */
-class Rewriter : public NetworkPipe {
-public:
-    Rewriter(NetworkPipe& pipe, boost::asio::ip::tcp::endpoint source, boost::asio::ip::tcp::endpoint destination) :
-        m_pipe(pipe),
-        m_source(source),
-        m_destination(destination)
-    {
-    }
-
-    void push(ConstPacket& packet) {
-        char data[IP_MAXPACKET];
-        memcpy(data, packet.data(), packet.length());
-        Packet mut_packet(data);
-
-        auto ip_hdr = mut_packet.ip_header();
-        memcpy(&ip_hdr->ip_src, m_source.address().to_v4().to_bytes().data(), 4);
-        memcpy(&ip_hdr->ip_dst, m_destination.address().to_v4().to_bytes().data(), 4);
-
-        auto tcp_hdr = mut_packet.tcp_header();
-        tcp_hdr->source = htons(m_source.port());
-        tcp_hdr->dest = htons(m_destination.port());
-        set_tcp_checksum(ip_hdr, tcp_hdr);
-
-        ConstPacket new_packet(mut_packet.data());
-        m_pipe.push(new_packet);
-    }
-
-private:
-    NetworkPipe& m_pipe;
-    boost::asio::ip::tcp::endpoint m_source;
-    boost::asio::ip::tcp::endpoint m_destination;
-};
-
-/**
- * Sends pushed packets to connected ipv4 socket
+ * Sends pushed data to connected socket
  */
 template <typename Socket>
 class Sender : public NetworkPipe {
@@ -282,6 +201,7 @@ private:
     Socket& m_socket;
     string m_name;
 };
+typedef Sender<boost::asio::ip::tcp::socket> TCPSender;
 
 /**
  * Sends pushed packets to connected UDT socket
@@ -327,68 +247,16 @@ private:
     string m_name;
 };
 
-/**
- * Sends pushed packets with disconnected socket to correct ip
- */
-template <typename Socket>
-class DisconnectedSender : public NetworkPipe { // TODO could fuse with Sender at the cost of having per Packet send/drop there too, which makes more sense slightly, conceptually
+class TCPClient {
 public:
-    DisconnectedSender(Socket& socket, string name) :
-        m_socket(socket),
-        m_name(name)
+    TCPClient(boost::asio::ip::tcp::socket* tcp_socket) :
+        m_tcp_socket(tcp_socket),
+        m_udt_socket(UDT::socket(AF_INET, SOCK_STREAM, 0)),
+
+        m_udt_sender(m_udt_socket, "udt sender"),
+        m_tcp_receiver(*m_tcp_socket, m_udt_sender, "tcp receiver") // TODO name + tcp client port, or no names, or name defaults to: proto sender/receiver src->dst port (let's do that latter)
     {
-    }
-
-    void push(ConstPacket& packet) {
-        ostream ostr(&m_buffer);
-        ostr.write(packet.data(), packet.length());
-        if (m_buffer.size() == packet.length()) { // Don't spawn when a previous send is not yet complete
-            boost::asio::spawn(m_socket.get_io_service(), boost::bind(&DisconnectedSender::send, this, _1));
-        }
-    }
-
-    void send(boost::asio::yield_context yield) {
-        while (m_buffer.size() > 0) {
-            ConstPacket packet(boost::asio::buffer_cast<const char*>(m_buffer.data()));
-            size_t length = packet.length() - packet.ip_header_size();
-            m_buffer.consume(packet.ip_header_size());
-            try {
-                boost::asio::ip::udp::endpoint destination(boost::asio::ip::address::from_string("127.0.0.1"), 22);
-                size_t bytes_transferred = m_socket.async_send_to(boost::asio::buffer(m_buffer.data(), length), destination, yield);
-                cout << m_name << " sent " << bytes_transferred << "/" << length << endl;
-            }
-            catch (exception& e) {
-                cerr << m_name << ": error: " << e.what() << endl;
-            }
-
-            // regardless of whether sending was a success, drop the packet
-            m_buffer.consume(length);
-        }
-    }
-
-private:
-    boost::asio::streambuf m_buffer;
-    Socket& m_socket;
-    string m_name;
-};
-
-class TCPToUDPMapping {
-public:
-    /**
-     * tcp_server: endpoint of the tcp server
-     * tcp_client: endpoint of the client that connected to our tcp server
-     */
-    TCPToUDPMapping(boost::asio::io_service& io_service, DisconnectedSender<boost::asio::generic::raw_protocol::socket>& raw_sender, boost::asio::ip::tcp::endpoint tcp_server, boost::asio::ip::tcp::endpoint tcp_client) :
-        m_udp_socket(UDT::socket(AF_INET, SOCK_STREAM, 0)),
-
-        m_udp_sender(m_udp_socket, "udt sender"),
-        // TODO next pipe last, name reeeally last
-        // TODO name + tcp client port, or no names, or name defaults to: udp sender src->dst port (let's do that latter)
-
-        m_rewriter(raw_sender, tcp_server, tcp_client)
-        //m_udp_receiver(m_udp_socket, m_rewriter, "udp receiver") // TODO rename
-    {
-        assert(m_udp_socket != UDT::INVALID_SOCK); // todo exception throw
+        assert(m_udt_socket != UDT::INVALID_SOCK); // TODO exception throw
 
         sockaddr_in localhost;
         localhost.sin_family = AF_INET;
@@ -396,68 +264,64 @@ public:
         memset(&localhost.sin_zero, 0, 8);
 
         localhost.sin_port = htons(udp_port_c);
-        if (UDT::ERROR == UDT::bind(m_udp_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
+        if (UDT::ERROR == UDT::bind(m_udt_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
             cerr << "client bind error: " << UDT::getlasterror().getErrorMessage() << endl;
             abort();
         }
 
         localhost.sin_port = htons(udp_port_s);
-        if (UDT::ERROR == UDT::connect(m_udp_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
+        if (UDT::ERROR == UDT::connect(m_udt_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
             cerr << "client connect error: " << UDT::getlasterror().getErrorMessage() << endl;
             abort();
         }
     }
 
-    NetworkPipe& udp_sender() {
-        return m_udp_sender;
+    ~TCPClient() {
+        delete m_tcp_socket;
     }
 
 private:
-    UDTSOCKET m_udp_socket; // TODO rename m_udt_socket
+    boost::asio::ip::tcp::socket* m_tcp_socket;
+    UDTSOCKET m_udt_socket;
 
-    UDTSender m_udp_sender;
-
-    Rewriter m_rewriter;
-    //UDTReceiver m_udp_receiver;
+    UDTSender m_udt_sender;
+    TCPReceiver m_tcp_receiver;
 };
 
-class TCPToUDPRouter : public NetworkPipe {
+class ClientTCPServer {
 public:
-    TCPToUDPRouter(boost::asio::generic::raw_protocol::socket& raw_socket, boost::asio::ip::tcp::endpoint source) :
-        m_io_service(raw_socket.get_io_service()),
-        m_tcp_server(source),
-        m_raw_sender(raw_socket, "raw sender")
+    ClientTCPServer(boost::asio::io_service& io_service) :
+        m_acceptor(io_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44401u))
     {
+        accept();
     }
 
-    void push(ConstPacket& packet) {
-        u_int16_t client_port = htons(packet.tcp_header()->source);
-        if (m_mappings.find(client_port) == m_mappings.end()) {
-            cout << "New tcp client at port " << client_port << endl;
-            boost::asio::ip::tcp::endpoint tcp_client(boost::asio::ip::address::from_string("127.0.0.1"), client_port);
-            m_mappings[client_port] = new TCPToUDPMapping(m_io_service, m_raw_sender, m_tcp_server, tcp_client);
+    void accept() {
+        auto new_socket = new boost::asio::ip::tcp::socket(m_acceptor.get_io_service());
+        auto callback = boost::bind(&ClientTCPServer::handle_accept, this, boost::asio::placeholders::error, new_socket);
+        m_acceptor.async_accept(*new_socket, callback);
+    }
+
+    void handle_accept(const boost::system::error_code& error, boost::asio::ip::tcp::socket* tcp_socket) {
+        if (error) {
+            cerr << "TCP Server: accept error: " << error.message() << endl;
+        }
+        else {
+            cout << "New tcp client at port " << tcp_socket->remote_endpoint().port() << endl;
+            new TCPClient(tcp_socket);  // Note: ownership of socket transferred to TCPClient instance
         }
 
-        m_mappings.at(client_port)->udp_sender().push(packet);
+        accept();
     }
 
 private:
-    boost::asio::io_service& m_io_service;
-    boost::asio::ip::tcp::endpoint m_tcp_server;
-    DisconnectedSender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
-
-    map<unsigned short, TCPToUDPMapping*> m_mappings;  // port -> mapping
+    boost::asio::ip::tcp::acceptor m_acceptor;
 };
 
 class Client {
 public:
-    Client() : 
-        m_tcp_server(boost::asio::ip::address::from_string("127.0.0.1"), 44401u),
-        m_raw_socket(m_io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
-
-        m_tcp_to_udp_router(m_raw_socket, m_tcp_server),
-        m_filter(m_tcp_to_udp_router, m_tcp_server.port()),
-        m_raw_receiver(m_raw_socket, m_filter, "raw receiver")
+    Client() :
+        m_tcp_server(m_io_service)
     {
     }
 
@@ -468,30 +332,27 @@ public:
 
 private:
     boost::asio::io_service m_io_service;
-    boost::asio::ip::tcp::endpoint m_tcp_server;  // endpoint of the tcp server
-    boost::asio::generic::raw_protocol::socket m_raw_socket;
-
-    TCPToUDPRouter m_tcp_to_udp_router;
-    TCPPortFilter m_filter;
-    Receiver<boost::asio::generic::raw_protocol::socket> m_raw_receiver;
+    ClientTCPServer m_tcp_server;
 };
 
-// TODO we can probably assume that upon each read exactly one packet is received, need to browse the web for that. We could switch to easier buffers too then, easier Packet formats too.
 class Server {
 public:
     Server() :
-        m_raw_socket(m_io_service, boost::asio::generic::raw_protocol(AF_INET, IPPROTO_TCP)),
-        m_udp_socket(UDT::socket(AF_INET, SOCK_STREAM, 0)),
+        m_raw_socket(m_io_service),
+        m_udt_socket(UDT::socket(AF_INET, SOCK_STREAM, 0)),
 
         //m_udp_sender(m_udp_socket, "udp sender"),
         //m_filter(m_udp_sender, 44403u),
         //m_raw_receiver(m_raw_socket, m_filter, "raw receiver"),
 
         m_raw_sender(m_raw_socket, "raw sender"),
-        m_rewriter(m_raw_sender, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44403u), boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)),
-        m_udp_receiver(m_udp_socket, m_rewriter, "udp receiver")
+        m_udt_receiver(m_udt_socket, m_raw_sender, "udt receiver")
     {
-        assert(m_udp_socket != UDT::INVALID_SOCK); // todo exception throw
+        // TCP
+        m_raw_socket.connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)); // TODO async when udt client connects
+
+        // UDT
+        assert(m_udt_socket != UDT::INVALID_SOCK); // todo exception throw
 
         sockaddr_in localhost; // TODO rename udt_server
         localhost.sin_family = AF_INET;
@@ -499,23 +360,24 @@ public:
         localhost.sin_port = htons(udp_port_s);
         memset(&localhost.sin_zero, 0, 8);
 
-        if (UDT::ERROR == UDT::bind(m_udp_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
+        if (UDT::ERROR == UDT::bind(m_udt_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
             cerr << "udt bind error: " << UDT::getlasterror().getErrorMessage() << endl;
             abort();
         }
 
-        if (UDT::ERROR == UDT::listen(m_udp_socket, 10)) {
+        if (UDT::ERROR == UDT::listen(m_udt_socket, 10)) {
             cerr << "udt listen error: " << UDT::getlasterror().getErrorMessage() << endl;
             abort();
         }
 
-        UDTSOCKET udt_client_socket = UDT::accept(m_udp_socket, nullptr, nullptr);
+        // TODO rendezvous (hole punching) works without listen/accept, it's a connect to each other thing!
+        UDTSOCKET udt_client_socket = UDT::accept(m_udt_socket, nullptr, nullptr);
         if (udt_client_socket == UDT::INVALID_SOCK) {
             cerr << "udt accept error: " << UDT::getlasterror().getErrorMessage() << endl;
             abort();
         }
 
-        m_udp_receiver.receive(udt_client_socket);
+        m_udt_receiver.receive(udt_client_socket);
     }
 
     void run() {
@@ -525,16 +387,16 @@ public:
 
 private:
     boost::asio::io_service m_io_service;
-    boost::asio::generic::raw_protocol::socket m_raw_socket;
-    UDTSOCKET m_udp_socket; // TODO rename m_udt_socket
+
+    boost::asio::ip::tcp::socket m_raw_socket;
+    UDTSOCKET m_udt_socket;
 
     /*Sender<boost::asio::ip::udp::socket> m_udp_sender;
     TCPPortFilter m_filter;
     Receiver<boost::asio::generic::raw_protocol::socket> m_raw_receiver;*/
 
-    DisconnectedSender<boost::asio::generic::raw_protocol::socket> m_raw_sender;
-    Rewriter m_rewriter;
-    UDTReceiver m_udp_receiver;
+    TCPSender m_raw_sender; // TODO rename
+    UDTReceiver m_udt_receiver;
 };
 
 
