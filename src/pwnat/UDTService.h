@@ -22,7 +22,7 @@
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
 #include <boost/array.hpp>
-#include <udt/udt.h>
+#include "UDTEventPoller.h"
 
 class UDTSocket;
 
@@ -51,14 +51,13 @@ public:
 private: // TODO check all things are appropriately private/public
     void run();
     void process_requests();
-    void epoll_add_usock(const UDTSOCKET socket, int events); // TODO extract to an EPoll class that wraps the EPoll methods in something that throws exceptions
     void epoll_remove_usock(const UDTSOCKET socket, int events);  // unregister events from socket
 
 private:
     const boost::array<EPOLLOpt, 2> m_epoll_events;
     boost::asio::io_service& m_io_service;
     boost::thread m_thread;
-    int m_poll_id;
+    UDTEventPoller m_event_poller;
     std::map<EPOLLOpt, std::map<UDTSOCKET, UDTSocket*>*> m_sockets;
 
     boost::mutex m_requests_lock;
