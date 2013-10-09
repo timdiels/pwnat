@@ -196,19 +196,15 @@ class Server {
 public:
     Server() :
         m_udt_service(m_io_service),
+        m_tcp_socket(m_io_service),
 
-        m_raw_socket(m_io_service),
+        m_tcp_sender(m_tcp_socket, "raw sender"),
+        m_udt_socket(m_udt_service, udp_port_s, udp_port_c, m_tcp_sender),
 
-        //m_udp_sender(m_udp_socket, "udp sender"),
-        //m_raw_receiver(m_raw_socket, m_filter, "raw receiver"),
-
-        m_raw_sender(m_raw_socket, "raw sender")
+        m_tcp_receiver(m_tcp_socket, m_udt_socket, "raw receiver")
     {
         // TCP
-        m_raw_socket.connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)); // TODO async when udt client connects
-
-        // UDT
-        new UDTSocket(m_udt_service, udp_port_s, udp_port_c, m_raw_sender);
+        m_tcp_socket.connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)); // TODO async when udt client connects
     }
 
     void run() {
@@ -220,9 +216,11 @@ private:
     boost::asio::io_service m_io_service;
     UDTService m_udt_service;
 
-    boost::asio::ip::tcp::socket m_raw_socket;
+    boost::asio::ip::tcp::socket m_tcp_socket;
 
-    TCPSender m_raw_sender; // TODO rename
+    TCPSender m_tcp_sender;
+    UDTSocket m_udt_socket;
+    TCPReceiver m_tcp_receiver;
 };
 
 
