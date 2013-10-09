@@ -24,7 +24,6 @@
 #include <boost/bind.hpp>
 #include <boost/array.hpp>
 #include <cassert>
-#include <netinet/ip_icmp.h>
 #include "packet.h" // TODO rename to checksum.h
 #include "udtservice/UDTService.h"
 #include "UDTSocket.h"
@@ -32,7 +31,7 @@
 
 using namespace std;
 
-class UDTClient {
+class UDTClient { // TODO rename ProxyClient
 public:
     UDTClient(boost::asio::io_service& io_service, UDTService& udt_service) : 
         m_tcp_socket(io_service),
@@ -54,22 +53,14 @@ private:
 /**
  * Listens for new UDTClients using pwnat ICMP trickery
  */
-class Server { // TODO rename to UDTServer or ProxyServer
+class Server { // TODO rename ProxyServer
 public:
     Server() :
         m_socket(m_io_service, boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
         m_udt_service(m_io_service)
     {
-        m_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string(g_icmp_address), 0));
-
-        m_icmp_request.type = ICMP_ECHO;
-        m_icmp_request.code = 0;
-        m_icmp_request.checksum = 0;
-        m_icmp_request.un.echo.id = 0;
-        m_icmp_request.un.echo.sequence = 0;
-        m_icmp_request.checksum = htons(0xf7ff);
-
-        send_icmp_request();
+        m_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string(g_icmp_echo_destination), 0));
+        send_icmp_echo();
     }
 
     void run() {
@@ -79,22 +70,21 @@ public:
 
 private:
     // TODO timed every 5 sec
-    void send_icmp_request() {
-        auto buffer = boost::asio::buffer(&m_icmp_request, sizeof(icmphdr));
+    void send_icmp_echo() {
+        auto buffer = boost::asio::buffer(&g_icmp_echo, sizeof(g_icmp_echo));
         auto callback = boost::bind(&Server::handle_send, this, boost::asio::placeholders::error);
         m_socket.async_send(buffer, callback);
     }
 
     void handle_send(const boost::system::error_code& error) {
         if (error) {
-            cerr << "Warning: ping failed: " << error.message() << endl;
+            cerr << "Warning: send icmp echo failed: " << error.message() << endl;
         }
     }
 
 private:
     boost::asio::io_service m_io_service;
     boost::asio::ip::icmp::socket m_socket;
-    icmphdr m_icmp_request;
 
     UDTService m_udt_service;
 };

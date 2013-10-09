@@ -24,4 +24,12 @@ using namespace std;
 const int udp_port_c = 22201;
 const int udp_port_s = 22203;
 
-const string g_icmp_address = "127.0.0.1"; // TODO replace by 3.3.3.3
+const string g_icmp_echo_destination = "127.0.0.1"; // TODO replace by 3.3.3.3
+
+const icmphdr g_icmp_echo = {
+    ICMP_ECHO, // type
+    0, // code
+    htons(0xf7ff), // checksum
+    0, // un.echo.id
+    0 // un.echo.sequence
+};

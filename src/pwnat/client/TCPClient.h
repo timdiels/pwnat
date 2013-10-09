@@ -28,13 +28,16 @@
 
 using namespace std;
 
+/**
+ * A fully connected TCPClient
+ */
 class TCPClient {
 public:
     TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket) :
         m_tcp_socket(tcp_socket),
 
         m_tcp_sender(*m_tcp_socket, "tcp sender"),
-        m_udt_socket(udt_service, udp_port_c, udp_port_s, m_tcp_sender),
+        m_udt_socket(udt_service, udp_port_c, udp_port_s),
 
         m_tcp_receiver(*m_tcp_socket, m_udt_socket, "tcp receiver") // TODO name + tcp client port, or no names, or name defaults to: proto sender/receiver src->dst port (let's do that latter)
     {

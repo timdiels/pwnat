@@ -33,6 +33,6 @@
 	typedef uint32_t in_addr_t;
 #endif /* WIN32 */
 
-uint16_t calc_icmp_checksum(uint16_t *data, int bytes);
+uint16_t get_checksum(uint16_t *data, int bytes);
 
 #endif
