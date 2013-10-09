@@ -24,7 +24,9 @@
 #include <boost/array.hpp>
 #include <cassert>
 #include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
 #include "socket.h" // TODO rename file: util.h
+#include "packet.h" // TODO rename to checksum.h
 #include "NetworkPipe.h"
 #include "udtservice/UDTService.h"
 #include "UDTSocket.h"
@@ -33,6 +35,9 @@ using namespace std;
 
 const int udp_port_c = 22201;
 const int udp_port_s = 22203;
+
+// TODO constants.h
+const string g_icmp_address = "127.0.0.1"; // TODO replace by 3.3.3.3
 
 void signal_handler(int sig);
 
@@ -191,6 +196,49 @@ private:
     ClientTCPServer m_tcp_server;
 };
 
+/**
+ * Listens for new UDTClients using pwnat ICMP trickery
+ */
+class UDTServer {
+public:
+    UDTServer(boost::asio::io_service& io_service) :
+        m_io_service(io_service),
+        m_socket(m_io_service, boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0))
+    {
+        cout << "connecting" << endl;
+        m_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string(g_icmp_address), 0));
+        cout << "done" << endl;
+
+        m_icmp_request.type = ICMP_ECHO;
+        m_icmp_request.code = 0;
+        m_icmp_request.checksum = 0;
+        m_icmp_request.un.echo.id = 0;
+        m_icmp_request.un.echo.sequence = 0;
+        m_icmp_request.checksum = htons(0xf7ff);
+
+        send_icmp_request();
+    }
+
+    // TODO timed every 5 sec
+    void send_icmp_request() {
+        cout << "sending icmp" << endl;
+        auto buffer = boost::asio::buffer(&m_icmp_request, sizeof(icmphdr));
+        auto callback = boost::bind(&UDTServer::handle_send, this, boost::asio::placeholders::error);
+        m_socket.async_send(buffer, callback);
+    }
+
+    void handle_send(const boost::system::error_code& error) {
+        if (error) {
+            cerr << "Warning: ping failed: " << error.message() << endl;
+        }
+    }
+
+private:
+    boost::asio::io_service& m_io_service;
+    boost::asio::ip::icmp::socket m_socket;
+    icmphdr m_icmp_request;
+};
+
 class Server {
 public:
     Server() :
@@ -200,9 +248,11 @@ public:
         m_tcp_sender(m_tcp_socket, "raw sender"),
         m_udt_socket(m_udt_service, udp_port_s, udp_port_c, m_tcp_sender),
 
-        m_tcp_receiver(m_tcp_socket, m_udt_socket, "raw receiver")
+        m_tcp_receiver(m_tcp_socket, m_udt_socket, "raw receiver"),
+
+        m_udt_server(m_io_service)
     {
-        // TCP
+        run(); // TODO
         m_tcp_socket.connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)); // TODO async when udt client connects
     }
 
@@ -220,6 +270,8 @@ private:
     TCPSender m_tcp_sender;
     UDTSocket m_udt_socket;
     TCPReceiver m_tcp_receiver;
+
+    UDTServer m_udt_server;
 };
 
 

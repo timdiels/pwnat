@@ -21,49 +21,17 @@
 #include "common.h"
 #include "packet.h"
 
-int create_listen_socket()
-{
-	int listen_sock;
-
-	listen_sock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-	if (listen_sock < 0)
-	{
-		printf("Couldn't create privileged icmp socket: %s\n", strerror(errno));
-		return 0;
-	}
-
-    if (fcntl(listen_sock, F_SETFL, O_NONBLOCK) == -1)
-	{
-        printf("F_SETFL: %s", strerror(errno));
-		return 0;
-	}
-
-	return listen_sock;
-}
-
 int create_icmp_socket()
 {
-	int icmp_sock;
-
-	icmp_sock = socket(AF_INET, SOCK_RAW, IPPROTO_RAW);
-	if (icmp_sock < 0)
-	{
-			printf("Couldn't create privileged raw socket: %s\n", strerror(errno));
-			return 0;
-	}
-
-	/* set SO_BROADCAST option */
-	socket_broadcast(icmp_sock);
-	/* set SO_IPHDRINCL option */
-	socket_iphdrincl(icmp_sock);
-
-	return icmp_sock;
+    /* set SO_BROADCAST option */
+    /* set SO_IPHDRINCL option */
+    return 0;
 }
 
 /* Send an ICMP time exceeded packet */
 int send_icmp( int icmp_sock, struct sockaddr_in *rsrc,  struct sockaddr_in *dest_addr, struct sockaddr_in *src_addr, int server)
 {
-	int pkt_len = IPHDR_SIZE + ICMPHDR_SIZE, err = 0;
+	/*int pkt_len = IPHDR_SIZE + ICMPHDR_SIZE, err = 0;
 	struct ip_packet_t* ip_pkt;
 	struct ip_packet_t* ip_pkt2;
 	struct icmp_packet_t* pkt;
@@ -96,15 +64,16 @@ int send_icmp( int icmp_sock, struct sockaddr_in *rsrc,  struct sockaddr_in *des
 	pkt->seq = 0;
 	pkt->checksum = 0;
 
+        */
 	/* Generate "original" packet if client to append to time exceeded */
-	if (!server)
+	/*if (!server)
 	{
 		ip_pkt2	= (ip_packet_t*)malloc(IPHDR_SIZE);
 		memset(ip_pkt2, 0, IPHDR_SIZE);
 		ip_pkt2->vers_ihl = 0x45;
-		ip_pkt2->tos = 0;
+		ip_pkt2->tos = 0;*/
 		/* no idea why i need to shift the bits here, but not on ip_pkt->pkt_len... */
-		ip_pkt2->pkt_len = (IPHDR_SIZE + ICMPHDR_SIZE) << 8;
+		/*ip_pkt2->pkt_len = (IPHDR_SIZE + ICMPHDR_SIZE) << 8;
 		ip_pkt2->id = 1; //kernel sets proper value htons(ip_id_counter);
 		ip_pkt2->flags_frag_offset = 0;
 		ip_pkt2->ttl = 1; // real TTL would be 1 on a time exceeded packet
@@ -143,7 +112,7 @@ int send_icmp( int icmp_sock, struct sockaddr_in *rsrc,  struct sockaddr_in *des
 		return -1;
 	}
 	else if (err != pkt_len)
-		printf("WARNING WARNING, didn't send entire packet\n");
+		printf("WARNING WARNING, didn't send entire packet\n");*/
 
 	return 0;
 }
@@ -161,29 +130,5 @@ uint16_t calc_icmp_checksum(uint16_t *data, int bytes)
 	sum = (sum & 0xFFFF) + (sum >> 16);
 	sum = htons(0xFFFF - sum);
 	return sum;
-}
-
-void socket_broadcast(int sd)
-{
-	const int one = 1;
-
-	if (setsockopt(sd, SOL_SOCKET, SO_BROADCAST,
-		(char *)&one, sizeof(one)) == -1)
-	{
-		printf("[socket_broadcast] can't set SO_BROADCAST option\n");
-		/* non fatal error */
-	}
-}
-
-void socket_iphdrincl(int sd)
-{
-	const int one = 1;
-
-	if (setsockopt(sd, IPPROTO_IP, IP_HDRINCL,
-		(char *)&one, sizeof(one)) == -1)
-	{
-		printf("[socket_iphdrincl] can't set IP_HDRINCL option\n");
-		/* non fatal error */
-	}
 }
 
