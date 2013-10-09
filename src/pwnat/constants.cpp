@@ -21,6 +21,7 @@
 
 using namespace std;
 
+// Note: multiple UDT sockets can reuse the same port, eventually we will have a single port configured, where udp_port_c = udp_port_s, because there's no way of communicating the proxy client port number (unless including it in e.g. the IP id)
 const int udp_port_c = 22201;
 const int udp_port_s = 22203;
 
