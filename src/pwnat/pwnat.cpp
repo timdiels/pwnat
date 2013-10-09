@@ -31,7 +31,6 @@
 #endif
 
 #include "common.h"
-#include "socket.h"
 
 int opt_debug = 0;
 struct sockaddr_in remote;

@@ -18,7 +18,8 @@
  */
 
 #include <signal.h>
-#include "client.h"
+#include <udt/udt.h>
+#include "client/Client.h"
 #include "server.h"
 
 void signal_handler(int sig);
@@ -31,6 +32,8 @@ int udpserver(int argc, char *argv[])
 {
     try {
         signal(SIGINT, &signal_handler);
+
+        UDT::startup();
 
         // prototype code
         if (argc == 0) {

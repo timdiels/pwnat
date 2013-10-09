@@ -19,50 +19,16 @@
 
 #pragma once
 
-// TODO slim down includes to essentials
 #include <boost/asio.hpp>
-#include <boost/asio/spawn.hpp>
 #include <boost/bind.hpp>
-#include <boost/array.hpp>
-#include <cassert>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
-//#include "socket.h" // TODO rename file: util.h
-#include "packet.h" // TODO rename to checksum.h
-#include "udtservice/UDTService.h"
-#include "UDTSocket.h"
-#include "Socket.h"
-#include "constants.h"
+#include <pwnat/udtservice/UDTService.h>
+#include "TCPClient.h"
 
 using namespace std;
 
-class TCPClient {
+class TCPServer {
 public:
-    TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket) :
-        m_tcp_socket(tcp_socket),
-
-        m_tcp_sender(*m_tcp_socket, "tcp sender"),
-        m_udt_socket(udt_service, udp_port_c, udp_port_s, m_tcp_sender),
-
-        m_tcp_receiver(*m_tcp_socket, m_udt_socket, "tcp receiver") // TODO name + tcp client port, or no names, or name defaults to: proto sender/receiver src->dst port (let's do that latter)
-    {
-        
-    }
-
-    ~TCPClient() {
-        delete m_tcp_socket;
-    }
-
-private:
-    boost::asio::ip::tcp::socket* m_tcp_socket;
-    TCPSender m_tcp_sender;
-    UDTSocket m_udt_socket;
-    TCPReceiver m_tcp_receiver;
-};
-
-class ClientTCPServer {
-public:
-    ClientTCPServer(boost::asio::io_service& io_service) :
+    TCPServer(boost::asio::io_service& io_service) :
         m_udt_service(io_service),
         m_acceptor(io_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44401u))
     {
@@ -71,7 +37,7 @@ public:
 
     void accept() {
         auto new_socket = new boost::asio::ip::tcp::socket(m_acceptor.get_io_service());
-        auto callback = boost::bind(&ClientTCPServer::handle_accept, this, boost::asio::placeholders::error, new_socket);
+        auto callback = boost::bind(&TCPServer::handle_accept, this, boost::asio::placeholders::error, new_socket);
         m_acceptor.async_accept(*new_socket, callback);
     }
 
@@ -90,22 +56,5 @@ public:
 private:
     UDTService m_udt_service;
     boost::asio::ip::tcp::acceptor m_acceptor;
-};
-
-class Client {
-public:
-    Client() :
-        m_tcp_server(m_io_service)
-    {
-    }
-
-    void run() {
-        cout << "running client" << endl;
-        m_io_service.run();
-    }
-
-private:
-    boost::asio::io_service m_io_service;
-    ClientTCPServer m_tcp_server;
 };
 

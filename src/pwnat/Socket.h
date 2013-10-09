@@ -17,6 +17,8 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#pragma once
+
 #include <boost/asio.hpp>
 #include <boost/asio/spawn.hpp>
 #include <boost/bind.hpp>
@@ -40,7 +42,7 @@ public:
     }
 
     void receive(boost::asio::yield_context yield) {
-        boost::array<char, IP_MAXPACKET> buffer;
+        boost::array<char, 64 * 1024> buffer;
         while (true) {
             try {
                 size_t bytes_transferred = m_socket.async_receive(boost::asio::buffer(buffer), yield);

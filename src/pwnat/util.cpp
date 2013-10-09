@@ -17,21 +17,8 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdio.h>
-#include <stdexcept>
-#include <string>
+#include "util.h"
 #include <cstring>
-#include <sys/types.h>
-
-#ifndef WIN32
-#include <unistd.h>
-#include <inttypes.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#endif /*WIN32*/
-
-#include "socket.h"
 #include "common.h"
 
 using namespace std;

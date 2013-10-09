@@ -28,7 +28,6 @@ UDTService::UDTService(boost::asio::io_service& io_service) :
     m_send_dispatcher(io_service, m_event_poller, UDT_EPOLL_OUT),
     m_thread(boost::bind(&UDTService::run, this))
 {
-    UDT::startup();
 }
 
 void UDTService::request_receive(UDTSocket& socket) {
