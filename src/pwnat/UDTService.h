@@ -21,10 +21,11 @@
 
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
-#include <boost/array.hpp>
 #include "UDTEventPoller.h"
+#include "UDTDispatcher.h"
 
 class UDTSocket;
+// TODO perhaps rename related classes such as the Poller and Dispatcher, and place them in a sub folder/namespace (to document the hierarchical use)
 
 /**
  * Polls for UDT events and dispatches io_service events
@@ -32,7 +33,6 @@ class UDTSocket;
 class UDTService {
 public:
     UDTService(boost::asio::io_service& io_service);
-    ~UDTService();
 
     /*
      * Notify UDTService that socket wants to receive data.
@@ -51,14 +51,12 @@ public:
 private: // TODO check all things are appropriately private/public
     void run();
     void process_requests();
-    void epoll_remove_usock(const UDTSOCKET socket, int events);  // unregister events from socket
 
 private:
-    const boost::array<EPOLLOpt, 2> m_epoll_events;
-    boost::asio::io_service& m_io_service;
-    boost::thread m_thread;
     UDTEventPoller m_event_poller;
-    std::map<EPOLLOpt, std::map<UDTSOCKET, UDTSocket*>*> m_sockets;
+    UDTDispatcher m_receive_dispatcher;
+    UDTDispatcher m_send_dispatcher;
+    boost::thread m_thread;
 
     boost::mutex m_requests_lock;
     std::vector<std::pair<UDTSocket*, EPOLLOpt>> m_requests;

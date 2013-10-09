@@ -18,24 +18,16 @@
  */
 
 #include "UDTService.h"
+#include <cassert>
 #include "UDTSocket.h"
 
 using namespace std;
 
 UDTService::UDTService(boost::asio::io_service& io_service) :
-    m_epoll_events({UDT_EPOLL_IN, UDT_EPOLL_OUT}),
-    m_io_service(io_service),
+    m_receive_dispatcher(io_service, m_event_poller, UDT_EPOLL_IN),
+    m_send_dispatcher(io_service, m_event_poller, UDT_EPOLL_OUT),
     m_thread(boost::bind(&UDTService::run, this))
 {
-    for (auto event : m_epoll_events) {
-        m_sockets[event] = new map<UDTSOCKET, UDTSocket*>;
-    }
-}
-
-UDTService::~UDTService() {
-    for (auto sockets : m_sockets) {
-        delete sockets.second;
-    }
 }
 
 void UDTService::request_receive(UDTSocket& socket) {
@@ -65,26 +57,14 @@ void UDTService::run() {
 
         // Dispatch events to sockets that can read
         for (auto socket_handle : receive_events) {
-            auto socket = m_sockets.at(UDT_EPOLL_IN)->at(socket_handle);
-            cout << "dispatch receive" << endl;
-
-            // unregister so we don't notify a thousand times
-            epoll_remove_usock(socket->socket(), UDT_EPOLL_IN);
-
-            // dispatch
-            m_io_service.dispatch(boost::bind(&UDTSocket::receive, socket));
+            m_receive_dispatcher.dispatch(socket_handle);
+            m_send_dispatcher.reregister(socket_handle);
         }
 
         // Dispatch events to sockets that can write
         for (auto socket_handle : send_events) {
-            auto socket = m_sockets.at(UDT_EPOLL_OUT)->at(socket_handle);
-            cout << "dispatch send" << endl;
-
-            // unregister so we don't notify a thousand times
-            epoll_remove_usock(socket->socket(), UDT_EPOLL_OUT);
-
-            // dispatch
-            m_io_service.dispatch(boost::bind(&UDTSocket::send, socket));
+            m_send_dispatcher.dispatch(socket_handle);
+            m_receive_dispatcher.reregister(socket_handle);
         }
 
         // Process pending registrations
@@ -95,32 +75,16 @@ void UDTService::run() {
 void UDTService::process_requests() {
     boost::lock_guard<boost::mutex> guard(m_requests_lock);
     for (auto request : m_requests) {
-        cout << "add usock: " << request.second << endl;
-        
         UDTSocket* socket = request.first;
-        m_event_poller.add(socket->socket(), request.second);
-        (*m_sockets.at(request.second))[socket->socket()] = socket;
+
+        if (request.second == UDT_EPOLL_IN) {
+            m_receive_dispatcher.register_(socket->socket(), boost::bind(&UDTSocket::receive, socket));
+        }
+        else {
+            assert(request.second == UDT_EPOLL_OUT);
+            m_send_dispatcher.register_(socket->socket(), boost::bind(&UDTSocket::send, socket));
+        }
     }
     m_requests.clear();
 }
 
-void UDTService::epoll_remove_usock(const UDTSOCKET socket, int events) {
-    // remove from all event registrations
-    m_event_poller.remove(socket);
-
-    // reregister for events it should still be registered for
-    int left_over_events = 0;  // events that it should still be registered for
-    for (auto event : m_epoll_events) {
-        auto& sockets = m_sockets[event];
-        if (events & event) {
-            sockets->erase(socket);
-        }
-        else if (sockets->find(socket) != sockets->end()) {
-            left_over_events |= event;
-        }
-    }
-
-    if (left_over_events) {
-        m_event_poller.add(socket, left_over_events);
-    }
-}
