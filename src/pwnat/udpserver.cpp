@@ -196,14 +196,33 @@ private:
     ClientTCPServer m_tcp_server;
 };
 
+class UDTClient {
+public:
+    UDTClient(boost::asio::io_service& io_service, UDTService& udt_service) : 
+        m_tcp_socket(io_service),
+        m_tcp_sender(m_tcp_socket, "tcp sender"),
+        m_udt_socket(udt_service, udp_port_s, udp_port_c, m_tcp_sender),
+
+        m_tcp_receiver(m_tcp_socket, m_udt_socket, "tcp receiver")
+    {
+        m_tcp_socket.connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)); // TODO async when udt client connects
+    }
+
+private:
+    boost::asio::ip::tcp::socket m_tcp_socket;
+    TCPSender m_tcp_sender;
+    UDTSocket m_udt_socket;
+    TCPReceiver m_tcp_receiver;
+};
+
 /**
  * Listens for new UDTClients using pwnat ICMP trickery
  */
-class UDTServer {
+class Server { // TODO rename to UDTServer or ProxyServer
 public:
-    UDTServer(boost::asio::io_service& io_service) :
-        m_io_service(io_service),
-        m_socket(m_io_service, boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0))
+    Server() :
+        m_socket(m_io_service, boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
+        m_udt_service(m_io_service)
     {
         cout << "connecting" << endl;
         m_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string(g_icmp_address), 0));
@@ -219,11 +238,17 @@ public:
         send_icmp_request();
     }
 
+    void run() {
+        cout << "running server" << endl;
+        m_io_service.run();
+    }
+
+private:
     // TODO timed every 5 sec
     void send_icmp_request() {
         cout << "sending icmp" << endl;
         auto buffer = boost::asio::buffer(&m_icmp_request, sizeof(icmphdr));
-        auto callback = boost::bind(&UDTServer::handle_send, this, boost::asio::placeholders::error);
+        auto callback = boost::bind(&Server::handle_send, this, boost::asio::placeholders::error);
         m_socket.async_send(buffer, callback);
     }
 
@@ -234,46 +259,12 @@ public:
     }
 
 private:
-    boost::asio::io_service& m_io_service;
+    boost::asio::io_service m_io_service;
     boost::asio::ip::icmp::socket m_socket;
     icmphdr m_icmp_request;
-};
 
-class Server {
-public:
-    Server() :
-        m_udt_service(m_io_service),
-        m_tcp_socket(m_io_service),
-
-        m_tcp_sender(m_tcp_socket, "raw sender"),
-        m_udt_socket(m_udt_service, udp_port_s, udp_port_c, m_tcp_sender),
-
-        m_tcp_receiver(m_tcp_socket, m_udt_socket, "raw receiver"),
-
-        m_udt_server(m_io_service)
-    {
-        run(); // TODO
-        m_tcp_socket.connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)); // TODO async when udt client connects
-    }
-
-    void run() {
-        cout << "running server" << endl;
-        m_io_service.run();
-    }
-
-private:
-    boost::asio::io_service m_io_service;
     UDTService m_udt_service;
-
-    boost::asio::ip::tcp::socket m_tcp_socket;
-
-    TCPSender m_tcp_sender;
-    UDTSocket m_udt_socket;
-    TCPReceiver m_tcp_receiver;
-
-    UDTServer m_udt_server;
 };
-
 
 /*
  * UDP Tunnel server main(). Handles program arguments, initializes everything,

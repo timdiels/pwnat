@@ -47,10 +47,10 @@ UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t d
 
     // TODO connecting can take a while (bind is instant), we should figure out how to do this in an async manner
     localhost.sin_port = htons(destination_port);
-    /*if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
+    if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
         cerr << "udt connect error: " << UDT::getlasterror().getErrorMessage() << endl;
         abort();
-    }*/// TODO reenable
+    }
 
     bool non_blocking_mode = false;
     UDT::setsockopt(m_socket, 0, UDT_SNDSYN, &non_blocking_mode, sizeof(bool));
