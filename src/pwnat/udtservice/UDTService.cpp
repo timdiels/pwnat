@@ -19,7 +19,7 @@
 
 #include "UDTService.h"
 #include <cassert>
-#include "UDTSocket.h"
+#include <pwnat/UDTSocket.h>
 
 using namespace std;
 

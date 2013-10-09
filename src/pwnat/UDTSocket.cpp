@@ -19,7 +19,7 @@
 
 #include "UDTSocket.h"
 #include <boost/array.hpp>
-#include "UDTService.h"
+#include "udtservice/UDTService.h"
 
 using namespace std;
 

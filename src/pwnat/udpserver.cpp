@@ -25,9 +25,8 @@
 #include <cassert>
 #include <netinet/ip.h>
 #include "socket.h" // TODO rename file: util.h
-//#include "checksum.h" // TODO rm file
 #include "NetworkPipe.h"
-#include "UDTService.h"
+#include "udtservice/UDTService.h"
 #include "UDTSocket.h"
 
 using namespace std;
