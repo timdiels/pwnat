@@ -23,7 +23,7 @@
 
 using namespace std;
 
-UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, NetworkPipe& pipe) :
+UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination, NetworkPipe& pipe) :
     m_udt_service(udt_service),
     m_socket(UDT::socket(AF_INET, SOCK_STREAM, 0)),
     m_name("UDT socket"),  // TODO include src->dst port in name
@@ -46,6 +46,7 @@ UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t d
     }
 
     // TODO connecting can take a while (bind is instant), we should figure out how to do this in an async manner
+    localhost.sin_addr.s_addr = htonl(destination.to_ulong());
     localhost.sin_port = htons(destination_port);
     if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
         cerr << "udt connect error: " << UDT::getlasterror().getErrorMessage() << endl;

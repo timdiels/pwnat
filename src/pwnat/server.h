@@ -28,15 +28,16 @@
 #include "UDTSocket.h"
 #include "constants.h"
 #include <pwnat/packet.h>
+#include "util.h"
 
 using namespace std;
 
 class UDTClient { // TODO rename ProxyClient
 public:
-    UDTClient(boost::asio::io_service& io_service, UDTService& udt_service) : 
+    UDTClient(boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 destination) : 
         m_tcp_socket(io_service),
         m_tcp_sender(m_tcp_socket, "tcp sender"),
-        m_udt_socket(udt_service, udp_port_s, udp_port_c, m_tcp_sender),
+        m_udt_socket(udt_service, udp_port_s, udp_port_c, destination, m_tcp_sender),
 
         m_tcp_receiver(m_tcp_socket, m_udt_socket, "tcp receiver")
     {
@@ -95,14 +96,18 @@ private:
         else {
             cout << "received icmp" << endl;
             auto ip_header = reinterpret_cast<ip*>(m_receive_buffer.data());
-            auto header = reinterpret_cast<icmp_ttl_exceeded*>(m_receive_buffer.data());
-            if (bytes_transferred == sizeof(ip) + sizeof(icmp_ttl_exceeded) &&
-                ip_header->ip_hl == 5 &&
+            const int ip_header_size = ip_header->ip_hl * 4;
+            auto header = reinterpret_cast<icmp_ttl_exceeded*>(m_receive_buffer.data() + ip_header_size);
+
+            if (bytes_transferred == ip_header_size + sizeof(icmp_ttl_exceeded) &&
+                header->ip_header.ip_hl == 5 &&
                 header->icmp.type == ICMP_TIME_EXCEEDED &&
-                header->original_icmp == g_imcp_echo) 
+                memcmp(&header->original_icmp, &g_icmp_echo, sizeof(g_icmp_echo)) == 0) 
             {
-                // somebody wants to connect
-                //ip_header->ip_src;
+                // somebody wants to connect, so let them
+                cout << "Accepting new proxy client" << endl;
+                boost::asio::ip::address_v4 destination(ntohl(ip_header->ip_src.s_addr));
+                new UDTClient(m_io_service, m_udt_service, destination); // TODO shouldn't do this more than once! (keep a map of ip -> client)
             }
         }
 

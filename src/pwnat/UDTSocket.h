@@ -26,11 +26,11 @@
 class UDTService;
 
 /**
- * Convenient wrapper around connected UDT socket for sending/receiving
+ * Convenient rendezvous UDT socket for sending/receiving
  */
 class UDTSocket : public NetworkPipe {
 public:
-    UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, NetworkPipe& pipe);
+    UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination, NetworkPipe& pipe);
 
     void receive();
     void push(ConstPacket& packet);
