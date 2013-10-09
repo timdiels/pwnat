@@ -29,6 +29,8 @@ class UDTSocket;
 
 /**
  * Polls for UDT events and dispatches io_service events
+ *
+ * Note: should be used as a singleton
  */
 class UDTService {
 public:
