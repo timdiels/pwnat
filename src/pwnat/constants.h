@@ -17,6 +17,8 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#pragma once
+
 #include <string>
 #include <netinet/ip_icmp.h>
 

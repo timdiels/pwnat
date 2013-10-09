@@ -28,6 +28,7 @@
 #include <pwnat/Socket.h>
 #include <pwnat/constants.h>
 #include <pwnat/checksum.h>
+#include <pwnat/packet.h>
 
 using namespace std;
 
@@ -86,10 +87,6 @@ private:
 private:
     boost::asio::ip::tcp::socket* m_tcp_socket;
     boost::asio::ip::icmp::socket m_icmp_socket;
-
-    struct icmp_ttl_exceeded {
-        icmphdr icmp;
-        ip ip_header;
-        icmphdr original_icmp;
-    } m_icmp_ttl_exceeded;
+     
+    icmp_ttl_exceeded m_icmp_ttl_exceeded;
 };

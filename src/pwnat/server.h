@@ -24,10 +24,10 @@
 #include <boost/bind.hpp>
 #include <boost/array.hpp>
 #include <cassert>
-#include "packet.h" // TODO rename to checksum.h
 #include "udtservice/UDTService.h"
 #include "UDTSocket.h"
 #include "constants.h"
+#include <pwnat/packet.h>
 
 using namespace std;
 
@@ -61,6 +61,7 @@ public:
     {
         m_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string(g_icmp_echo_destination), 0));
         send_icmp_echo();
+        start_receive();
     }
 
     void run() {
@@ -82,9 +83,36 @@ private:
         }
     }
 
+    void start_receive() {
+        auto callback = boost::bind(&Server::handle_receive, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
+        m_socket.async_receive(boost::asio::buffer(m_receive_buffer), callback);
+    }
+
+    void handle_receive(boost::system::error_code error, size_t bytes_transferred) {
+        if (error) {
+            cerr << "Warning: icmp receive error: " << error.message() << endl;
+        }
+        else {
+            cout << "received icmp" << endl;
+            auto ip_header = reinterpret_cast<ip*>(m_receive_buffer.data());
+            auto header = reinterpret_cast<icmp_ttl_exceeded*>(m_receive_buffer.data());
+            if (bytes_transferred == sizeof(ip) + sizeof(icmp_ttl_exceeded) &&
+                ip_header->ip_hl == 5 &&
+                header->icmp.type == ICMP_TIME_EXCEEDED &&
+                header->original_icmp == g_imcp_echo) 
+            {
+                // somebody wants to connect
+                //ip_header->ip_src;
+            }
+        }
+
+        start_receive();
+    }
+
 private:
     boost::asio::io_service m_io_service;
     boost::asio::ip::icmp::socket m_socket;
+    boost::array<char, 64 * 1024> m_receive_buffer;
 
     UDTService m_udt_service;
 };
