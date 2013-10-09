@@ -21,6 +21,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/thread.hpp>
+#include <boost/array.hpp>
 #include <udt/udt.h>
 
 class UDTSocket;
@@ -31,20 +32,36 @@ class UDTSocket;
 class UDTService {
 public:
     UDTService(boost::asio::io_service& io_service);
+    ~UDTService();
 
-    void register_(UDTSocket& socket);
+    /*
+     * Notify UDTService that socket wants to receive data.
+     *
+     * UDTService will notify UDTSocket once (or twice) when there is data to receive with recv()
+     */
+    void request_receive(UDTSocket& socket);
+
+    /*
+     * Notify UDTService that socket wants to send
+     *
+     * UDTService will notify UDTSocket once (or twice) when there is room in buffer to send some data with send()
+     */
+    void request_send(UDTSocket& socket);
 
 private: // TODO check all things are appropriately private/public
     void run();
     void process_requests();
+    void epoll_add_usock(const UDTSOCKET socket, int events); // TODO extract to an EPoll class that wraps the EPoll methods in something that throws exceptions
+    void epoll_remove_usock(const UDTSOCKET socket, int events);  // unregister events from socket
 
 private:
+    const boost::array<EPOLLOpt, 2> m_epoll_events;
     boost::asio::io_service& m_io_service;
     boost::thread m_thread;
     int m_poll_id;
-    std::map<UDTSOCKET, UDTSocket*> m_registrations;
+    std::map<EPOLLOpt, std::map<UDTSOCKET, UDTSocket*>*> m_sockets;
 
-    boost::mutex m_requests_lock; // registration requests, ...
-    std::vector<UDTSocket*> m_pending_registrations;
+    boost::mutex m_requests_lock;
+    std::vector<std::pair<UDTSocket*, EPOLLOpt>> m_requests;
 };
 

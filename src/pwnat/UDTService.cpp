@@ -23,14 +23,27 @@
 using namespace std;
 
 UDTService::UDTService(boost::asio::io_service& io_service) :
-    m_io_service(io_service)
-    //m_thread(boost::bind(&UDTService::run, this)) TODO
+    m_epoll_events({UDT_EPOLL_IN, UDT_EPOLL_OUT}),
+    m_io_service(io_service),
+    m_thread(boost::bind(&UDTService::run, this))
 {
+    for (auto event : m_epoll_events) {
+        m_sockets[event] = new map<UDTSOCKET, UDTSocket*>;
+    }
 }
 
-void UDTService::register_(UDTSocket& socket) {
+UDTService::~UDTService() {
+    UDT::epoll_release(m_poll_id);
+}
+
+void UDTService::request_receive(UDTSocket& socket) {
     boost::lock_guard<boost::mutex> guard(m_requests_lock);
-    m_pending_registrations.push_back(&socket);
+    m_requests.push_back(make_pair(&socket, UDT_EPOLL_IN));
+}
+
+void UDTService::request_send(UDTSocket& socket) {
+    boost::lock_guard<boost::mutex> guard(m_requests_lock);
+    m_requests.push_back(make_pair(&socket, UDT_EPOLL_OUT));
 }
 
 void UDTService::run() {
@@ -44,9 +57,15 @@ void UDTService::run() {
 
     set<UDTSOCKET> receive_events; // sockets that can receive
     set<UDTSOCKET> send_events; // sockets that can send
-    const int64_t timeout_ms = 500;
+    const int64_t timeout_ms = 1000;
 
+    /*
+     * epoll_wait notes:
+     * - a socket is returned in receive events <=> socket has data waiting for it in the receive buffer
+     * - a socket is returned in send events <=> socket has room for new data in its send buffer (this is called over and over if you'd leave the socket registered to the write event with no data to send)
+     */
     while (true) {
+        cout << "waiting" << endl;
         if (UDT::epoll_wait(m_poll_id, &receive_events, &send_events, timeout_ms) < 0) {
             cerr << "epoll_wait failed" << endl;
             abort();
@@ -54,15 +73,25 @@ void UDTService::run() {
 
         // Dispatch events to sockets that can read
         for (auto socket_handle : receive_events) {
-            auto socket = m_registrations.at(socket_handle);
+            auto socket = m_sockets.at(UDT_EPOLL_IN)->at(socket_handle);
             cout << "dispatch receive" << endl;
+
+            // unregister so we don't notify a thousand times
+            UDT::epoll_remove_usock(socket->socket(), UDT_EPOLL_IN);
+
+            // dispatch
             m_io_service.dispatch(boost::bind(&UDTSocket::receive, socket));
         }
 
         // Dispatch events to sockets that can write
         for (auto socket_handle : send_events) {
-            auto socket = m_registrations.at(socket_handle);
+            auto socket = m_sockets.at(UDT_EPOLL_OUT)->at(socket_handle);
             cout << "dispatch send" << endl;
+
+            // unregister so we don't notify a thousand times
+            UDT::epoll_remove_usock(socket->socket(), UDT_EPOLL_OUT);
+
+            // dispatch
             m_io_service.dispatch(boost::bind(&UDTSocket::send, socket));
         }
 
@@ -73,15 +102,43 @@ void UDTService::run() {
 
 void UDTService::process_requests() {
     boost::lock_guard<boost::mutex> guard(m_requests_lock);
-    for (auto registration : m_pending_registrations) {
-        cout << "register" << endl;
+    for (auto request : m_requests) {
+        cout << "add usock: " << request.second << endl;
         
-        if (UDT::epoll_add_usock(m_poll_id, registration->socket()) < 0) {
-            cerr << "epoll_add_usock failed" << endl;
-            abort();
-        }
-        m_registrations[registration->socket()] = registration;
+        UDTSocket* socket = request.first;
+        epoll_add_usock(socket->socket(), request.second);
+        (*m_sockets.at(request.second))[socket->socket()] = socket;
     }
-    m_pending_registrations.clear();
+    m_requests.clear();
 }
 
+void UDTService::epoll_add_usock(const UDTSOCKET socket, int events) {
+    if (UDT::epoll_add_usock(m_poll_id, socket, &events) < 0) {
+        cerr << "epoll_add_usock failed" << endl;
+        abort();
+    }
+}
+
+void UDTService::epoll_remove_usock(const UDTSOCKET socket, int events) {
+    // remove from all event registrations
+    if (UDT::epoll_remove_usock(m_poll_id, socket) < 0) {
+        cerr << "epoll_remove_usock failed" << endl;
+        abort();
+    }
+
+    // reregister for events it should still be registered for
+    int left_over_events = 0;  // events that it should still be registered for
+    for (auto event : m_epoll_events) {
+        auto& sockets = m_sockets[event];
+        if (events & event) {
+            sockets->erase(socket);
+        }
+        else if (sockets->find(socket) != sockets->end()) {
+            left_over_events |= event;
+        }
+    }
+
+    if (left_over_events) {
+        epoll_add_usock(socket, left_over_events);
+    }
+}

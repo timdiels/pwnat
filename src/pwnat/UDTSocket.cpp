@@ -18,7 +18,6 @@
  */
 
 #include "UDTSocket.h"
-#include <netinet/ip.h>
 #include <boost/array.hpp>
 #include "UDTService.h"
 
@@ -57,23 +56,30 @@ UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t d
     UDT::setsockopt(m_socket, 0, UDT_SNDSYN, &non_blocking_mode, sizeof(bool));
     UDT::setsockopt(m_socket, 0, UDT_RCVSYN, &non_blocking_mode, sizeof(bool));
 
-    m_udt_service.register_(*this);
+    m_udt_service.request_receive(*this);
 }
 
 void UDTSocket::receive() {
-    boost::array<char, IP_MAXPACKET> buffer;
+    boost::array<char, 64 * 1024> buffer; // allocate buffer to more or less the max an IP packet can carry
 
     cout << "receiving" << endl;
     int bytes_transferred = UDT::recv(m_socket, buffer.data(), buffer.size(), 0);
     if (bytes_transferred == UDT::ERROR) {
-        cerr << m_name << ": error: " << UDT::getlasterror().getErrorMessage() << endl;
-        abort();
+        auto error = UDT::getlasterror();
+        const int EASYNCRCV = 6002; // no data available to receive
+        if (error.getErrorCode() != EASYNCRCV) {
+            cerr << m_name << ": error: " << error.getErrorMessage() << endl;
+            abort();
+        }
     }
     else {
         cout << m_name << " received " << bytes_transferred << endl;
         ConstPacket packet(buffer.data(), bytes_transferred);
         m_pipe.push(packet);
     }
+
+    // always request to receive more
+    m_udt_service.request_receive(*this);
 }
 
 void UDTSocket::push(ConstPacket& packet) {
@@ -83,6 +89,10 @@ void UDTSocket::push(ConstPacket& packet) {
 }
 
 void UDTSocket::send() {
+    if (m_buffer.size() == 0) {
+        return;
+    }
+
     cout << "sending " << m_buffer.size() << endl;
     int bytes_transferred = UDT::send(m_socket, boost::asio::buffer_cast<const char*>(m_buffer.data()), m_buffer.size(), 0);
     if (bytes_transferred == UDT::ERROR) {
@@ -92,6 +102,12 @@ void UDTSocket::send() {
     else {
         cout << m_name << " sent " << bytes_transferred << endl;
         m_buffer.consume(bytes_transferred);
+    }
+
+    if (m_buffer.size() > 0) {
+        // didn't manage to send everything, assume internal buffer is full
+        cout << m_name << ": send buffer full, waiting" << endl;
+        m_udt_service.request_send(*this);
     }
 }
 
