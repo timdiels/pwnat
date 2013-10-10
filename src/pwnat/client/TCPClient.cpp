@@ -101,5 +101,5 @@ void TCPClient::handle_send(const boost::system::error_code& error) {
 }
 
 void TCPClient::handle_connected() {
-    // TODO stop icmp timer
+    m_icmp_timer.cancel();
 }
