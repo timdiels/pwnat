@@ -28,11 +28,12 @@ using namespace std;
 TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket) :
     m_udt_socket(udt_service, udp_port_c, udp_port_s, boost::asio::ip::address_v4::from_string("127.0.0.1")),
     m_tcp_socket(*tcp_socket, m_udt_socket), 
-    m_icmp_socket(tcp_socket->get_io_service(), boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0))
+    m_icmp_socket(tcp_socket->get_io_service(), boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
+    m_icmp_timer(tcp_socket->get_io_service())
 {
     m_icmp_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0));
     build_icmp_ttl_exceeded();
-    send_icmp_ttl_exceeded(); // send once (for testing purposes only) TODO
+    send_icmp_ttl_exceeded();
 
     m_udt_socket.pipe(m_tcp_socket);
     m_udt_socket.add_connection_listener(boost::bind(&TCPClient::handle_connected, this));
@@ -65,11 +66,32 @@ void TCPClient::build_icmp_ttl_exceeded() {
     m_icmp_ttl_exceeded.icmp.checksum = htons(get_checksum(reinterpret_cast<uint16_t*>(&m_icmp_ttl_exceeded), sizeof(icmp_ttl_exceeded)));
 }
 
-// TODO timed every 5 sec
 void TCPClient::send_icmp_ttl_exceeded() {
-    auto buffer = boost::asio::buffer(&m_icmp_ttl_exceeded, sizeof(icmp_ttl_exceeded));
-    auto callback = boost::bind(&TCPClient::handle_send, this, boost::asio::placeholders::error);
-    m_icmp_socket.async_send(buffer, callback);
+    // send
+    {
+        auto buffer = boost::asio::buffer(&m_icmp_ttl_exceeded, sizeof(icmp_ttl_exceeded));
+        auto callback = boost::bind(&TCPClient::handle_send, this, boost::asio::placeholders::error);
+        m_icmp_socket.async_send(buffer, callback);
+    }
+
+    // set timer
+    {
+        m_icmp_timer.expires_from_now(boost::posix_time::seconds(5));
+        auto callback = boost::bind(&TCPClient::handle_icmp_timer_expired, this, boost::asio::placeholders::error);
+        m_icmp_timer.async_wait(callback);
+    }
+}
+
+void TCPClient::handle_icmp_timer_expired(const boost::system::error_code& error) {
+    if (error) {
+        if (error.value() != boost::asio::error::operation_aborted) {  // aborted = timer cancelled
+            cerr << "Unexpected timer error: " << error.message() << endl;
+            abort();
+        }
+    }
+    else {
+        send_icmp_ttl_exceeded();
+    } 
 }
 
 void TCPClient::handle_send(const boost::system::error_code& error) {

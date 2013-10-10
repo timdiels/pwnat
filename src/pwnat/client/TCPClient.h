@@ -35,6 +35,7 @@ private:
     void build_icmp_ttl_exceeded();
     void send_icmp_ttl_exceeded();
     void handle_send(const boost::system::error_code& error);
+    void handle_icmp_timer_expired(const boost::system::error_code& error);
     void handle_connected();
 
 private:
@@ -42,5 +43,6 @@ private:
     TCPSocket m_tcp_socket;
 
     boost::asio::ip::icmp::socket m_icmp_socket;
+    boost::asio::deadline_timer m_icmp_timer;
     icmp_ttl_exceeded m_icmp_ttl_exceeded;
 };
