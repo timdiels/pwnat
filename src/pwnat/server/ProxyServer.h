@@ -23,12 +23,16 @@
 #include <boost/array.hpp>
 #include <pwnat/udtservice/UDTService.h>
 
+class ProxyClient;
+
 /**
  * Listens for new ProxyClients using pwnat ICMP trickery
  */
 class ProxyServer {
 public:
     ProxyServer();
+    ~ProxyServer();
+
     void run(); // TODO rm
 
 private:
@@ -45,5 +49,6 @@ private:
     boost::array<char, 64 * 1024> m_receive_buffer;
 
     UDTService m_udt_service;
+    std::map<boost::asio::ip::address_v4, ProxyClient*> m_clients; // client ip -> client*
 };
 

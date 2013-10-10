@@ -37,6 +37,12 @@ ProxyServer::ProxyServer() :
     start_receive();
 }
 
+ProxyServer::~ProxyServer() {
+    for (auto entry : m_clients) {
+        delete entry.second;
+    }
+}
+
 void ProxyServer::run() {
     cout << "running server" << endl;
     m_io_service.run();
@@ -96,10 +102,11 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
             header->icmp.type == ICMP_TIME_EXCEEDED &&
             memcmp(&header->original_icmp, &g_icmp_echo, sizeof(g_icmp_echo)) == 0) 
         {
-            // somebody wants to connect, so let them
-            cout << "Accepting new proxy client" << endl;
-            boost::asio::ip::address_v4 destination(ntohl(ip_header->ip_src.s_addr));
-            new ProxyClient(m_io_service, m_udt_service, destination); // TODO shouldn't do this more than once! (keep a map of ip -> client)
+            boost::asio::ip::address_v4 client_address(ntohl(ip_header->ip_src.s_addr));
+            if (m_clients.find(client_address) == m_clients.end()) {
+                cout << "Accepting new proxy client" << endl;
+                m_clients[client_address] = new ProxyClient(m_io_service, m_udt_service, client_address);
+            }
         }
     }
 
