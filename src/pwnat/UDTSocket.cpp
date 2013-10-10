@@ -18,6 +18,7 @@
  */
 
 #include "UDTSocket.h"
+#include <cassert>
 #include <boost/array.hpp>
 #include "udtservice/UDTService.h"
 
@@ -50,9 +51,6 @@ UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t d
     UDT::setsockopt(m_socket, 0, UDT_SNDSYN, &non_blocking_mode, sizeof(bool));
     UDT::setsockopt(m_socket, 0, UDT_RCVSYN, &non_blocking_mode, sizeof(bool));
 
-    m_udt_service.request_receive(*this);
-    m_udt_service.request_send(*this); // this is to find out when we're connected
-
     localhost.sin_addr.s_addr = htonl(destination.to_ulong());
     localhost.sin_port = htons(destination_port);
     if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
@@ -61,8 +59,33 @@ UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t d
     }
 }
 
+UDTSocket::~UDTSocket() {
+    assert(disposed());
+    UDT::close(m_socket);
+    cout << m_name << " closed" << endl;
+}
+
+void UDTSocket::dispose() {
+    if (Disposable::dispose()) {
+        m_udt_service.request_unregister(m_socket);
+    }
+}
+
+void UDTSocket::init() {
+    request_receive();
+    request_send(); // this is to find out when we're connected
+}
+
+void UDTSocket::request_receive() {
+    m_udt_service.request_receive(m_socket, boost::bind(&UDTSocket::receive, shared_from_this()));
+}
+
+void UDTSocket::request_send() {
+    m_udt_service.request_send(m_socket, boost::bind(&UDTSocket::send, shared_from_this()));
+}
+
 void UDTSocket::receive() {
-    if (!m_pipe) {
+    if (disposed() || !m_pipe) {
         return;
     }
 
@@ -75,7 +98,7 @@ void UDTSocket::receive() {
         const int EASYNCRCV = 6002; // no data available to receive
         if (error.getErrorCode() != EASYNCRCV) {
             cerr << m_name << ": error: " << error.getErrorMessage() << endl;
-            abort();
+            abort(); // TODO die() instead
         }
     }
     else {
@@ -85,10 +108,14 @@ void UDTSocket::receive() {
     }
 
     // always request to receive more
-    m_udt_service.request_receive(*this);
+    request_receive();
 }
 
 void UDTSocket::push(ConstPacket& packet) {
+    if (disposed()) {
+        return;
+    }
+
     ostream ostr(&m_buffer);
     ostr.write(packet.data(), packet.length());
     if (m_connected) {
@@ -97,6 +124,10 @@ void UDTSocket::push(ConstPacket& packet) {
 }
 
 void UDTSocket::add_connection_listener(boost::function<void()> handler) {
+    if (disposed()) {
+        return;
+    }
+
     if (m_connected) {
         handler();
     }
@@ -106,11 +137,19 @@ void UDTSocket::add_connection_listener(boost::function<void()> handler) {
 }
 
 void UDTSocket::pipe(NetworkPipe& pipe) {
+    if (disposed()) {
+        return;
+    }
+
     m_pipe = &pipe;
-    m_udt_service.request_receive(*this);
+    request_receive();
 }
 
 void UDTSocket::send() {
+    if (disposed()) {
+        return;
+    }
+
     if (!m_connected) {
         m_connected = true;
         for (auto handler : m_connection_listeners) {
@@ -137,7 +176,7 @@ void UDTSocket::send() {
     if (m_buffer.size() > 0) {
         // didn't manage to send everything, assume internal buffer is full
         cout << m_name << ": send buffer full, waiting" << endl;
-        m_udt_service.request_send(*this);
+        request_send();
     }
 }
 

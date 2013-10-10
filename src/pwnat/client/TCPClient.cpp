@@ -26,7 +26,7 @@
 using namespace std;
 
 TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket) :
-    m_udt_socket(udt_service, udp_port_c, udp_port_s, boost::asio::ip::address_v4::from_string("127.0.0.1")),
+    m_udt_socket(make_shared<UDTSocket>(udt_service, udp_port_c, udp_port_s, boost::asio::ip::address_v4::from_string("127.0.0.1"))),
     m_tcp_socket(*tcp_socket, m_udt_socket, boost::bind(&TCPClient::die, this)), 
     m_icmp_socket(tcp_socket->get_io_service(), boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
     m_icmp_timer(tcp_socket->get_io_service())
@@ -35,8 +35,9 @@ TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_
     build_icmp_ttl_exceeded();
     send_icmp_ttl_exceeded();
 
-    m_udt_socket.pipe(m_tcp_socket);
-    m_udt_socket.add_connection_listener(boost::bind(&TCPClient::handle_connected, this));
+    m_udt_socket->init();
+    m_udt_socket->pipe(m_tcp_socket);
+    m_udt_socket->add_connection_listener(boost::bind(&TCPClient::handle_connected, this));
 }
 
 TCPClient::~TCPClient() {
@@ -45,6 +46,7 @@ TCPClient::~TCPClient() {
 
 void TCPClient::die() {
     cerr << "TCPClient died" << endl;
+    m_udt_socket->dispose();
     delete this;
 }
 

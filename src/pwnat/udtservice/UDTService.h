@@ -25,7 +25,6 @@
 #include "UDTDispatcher.h"
 
 class UDTSocket;
-// TODO perhaps rename related classes such as the Poller and Dispatcher, and place them in a sub folder/namespace (to document the hierarchical use)
 
 /**
  * Polls for UDT events and dispatches io_service events
@@ -36,19 +35,24 @@ class UDTService {
 public:
     UDTService(boost::asio::io_service& io_service);
 
-    /*
+    /**
      * Notify UDTService that socket wants to receive data.
      *
-     * UDTService will notify UDTSocket once (or twice) when there is data to receive with recv()
+     * UDTService will call the callback once (or twice) when there is data to receive with recv()
      */
-    void request_receive(UDTSocket& socket);
+    void request_receive(UDTSOCKET socket, boost::function<void()> callback);
 
-    /*
+    /**
      * Notify UDTService that socket wants to send
      *
-     * UDTService will notify UDTSocket once (or twice) when there is room in buffer to send some data with send()
+     * UDTService will call the callback once (or twice) when there is room in buffer to send some data with send()
      */
-    void request_send(UDTSocket& socket);
+    void request_send(UDTSOCKET socket, boost::function<void()> callback);
+
+    /**
+     * Unregister from all 
+     */
+    void request_unregister(UDTSOCKET socket);
 
 private: // TODO check all things are appropriately private/public
     void run();
@@ -60,7 +64,7 @@ private:
     UDTDispatcher m_send_dispatcher;
     boost::thread m_thread;
 
-    boost::mutex m_requests_lock;
-    std::vector<std::pair<UDTSocket*, EPOLLOpt>> m_requests;
+    boost::mutex m_unregister_requests_lock;
+    std::vector<UDTSOCKET> m_unregister_requests;
 };
 

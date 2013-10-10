@@ -29,6 +29,11 @@ UDTDispatcher::UDTDispatcher(boost::asio::io_service& io_service, UDTEventPoller
 {
 }
 
+void UDTDispatcher::request_register(UDTSOCKET socket, boost::function<void()> callback) {
+    boost::lock_guard<boost::mutex> guard(m_requests_lock);
+    m_requests.push_back(make_pair(socket, callback));
+}
+
 void UDTDispatcher::register_(UDTSOCKET socket, boost::function<void()> callback) {
     cout << "register: " << m_event << endl;
     
@@ -51,5 +56,13 @@ void UDTDispatcher::dispatch(UDTSOCKET socket) {
     cout << "dispatch " << m_event << endl;
     m_io_service.dispatch(m_callbacks.at(socket));
     unregister(socket);
+}
+
+void UDTDispatcher::process_requests() {
+    boost::lock_guard<boost::mutex> guard(m_requests_lock);
+    for (auto request : m_requests) {
+        register_(request.first, request.second);
+    }
+    m_requests.clear();
 }
 

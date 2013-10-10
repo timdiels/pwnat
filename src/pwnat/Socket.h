@@ -22,6 +22,7 @@
 #include <boost/asio.hpp>
 #include <boost/array.hpp>
 #include <boost/function.hpp>
+#include <memory>
 #include "NetworkPipe.h"
 
 /**
@@ -33,7 +34,7 @@ public:
     /**
      * death_callback: called when the socket encounters a fatal error, disconnects, ...
      */
-    Socket(SocketType& socket, NetworkPipe& pipe, boost::function<void()> death_callback);
+    Socket(SocketType& socket, std::shared_ptr<NetworkPipe> pipe, boost::function<void()> death_callback);
     virtual ~Socket();
 
     void push(ConstPacket& packet);
@@ -53,7 +54,7 @@ private:
     boost::function<void()> m_death_callback;
 
     // receive
-    NetworkPipe& m_pipe;
+    std::shared_ptr<NetworkPipe> m_pipe;
     boost::array<char, 64 * 1024> m_receive_buffer;
 
     // send

@@ -48,6 +48,6 @@ private:
     boost::asio::ip::address_v4 m_address;
     boost::asio::ip::tcp::socket m_tcp_socket_;
     TCPSocket* m_tcp_socket;
-    UDTSocket m_udt_socket;
+    std::shared_ptr<UDTSocket> m_udt_socket;
 };
 

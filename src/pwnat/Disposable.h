@@ -19,38 +19,19 @@
 
 #pragma once
 
-template <typename chartype>
-class BasicPacket {
+class Disposable {
 public:
-    BasicPacket(chartype* data, size_t length) : 
-        m_data(data),
-        m_length(length)
-    {
-    }
-
-    chartype* data() {
-        return m_data;
-    }
-
-    size_t length() {
-        return m_length;
-    }
-
-
-private:
-    chartype* m_data;
-    size_t m_length;
-};
-
-typedef BasicPacket<char> Packet;
-typedef BasicPacket<const char> ConstPacket;
-
-class NetworkPipe {
-public:
-    virtual ~NetworkPipe() {}
+    Disposable();
+    virtual ~Disposable();
 
     /**
-     * Push packet of given length onto pipe
+     * Returns false if was already disposed, true otherwise
      */
-    virtual void push(ConstPacket&) = 0;
+    bool dispose();
+
+protected:
+    bool disposed();
+
+private:
+    bool m_disposed;
 };

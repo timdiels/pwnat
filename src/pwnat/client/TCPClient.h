@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <memory>
 #include <boost/asio.hpp>
 #include <pwnat/UDTSocket.h>
 #include <pwnat/Socket.h>
@@ -40,7 +41,7 @@ private:
     void handle_connected();
 
 private:
-    UDTSocket m_udt_socket;
+    std::shared_ptr<UDTSocket> m_udt_socket;
     TCPSocket m_tcp_socket;
 
     boost::asio::ip::icmp::socket m_icmp_socket;

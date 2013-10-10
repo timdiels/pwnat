@@ -22,17 +22,31 @@
 #include <udt/udt.h>
 #include <boost/asio.hpp>
 #include <boost/function.hpp>
+#include <memory>
 #include "NetworkPipe.h"
+#include "Disposable.h"
 
 class UDTService;
 
+// TODO once TCPSocket is shared too, you'll have to unset the pipe upon dispose
 /**
  * Convenient rendezvous UDT socket for sending/receiving
+ *
+ * Note on using Disposable pattern + shared_ptr: Event notifications may still
+ * come in after the object is supposed to be dead. Until then it has to stay
+ * alive and not respond to those notifications
  */
-class UDTSocket : public NetworkPipe {
+class UDTSocket : public NetworkPipe, public Disposable, public std::enable_shared_from_this<UDTSocket> {
 public:
     UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination);
 
+    /**
+     * Closes the socket
+     */
+    ~UDTSocket();
+
+    void init();
+    void dispose();
     void pipe(NetworkPipe& pipe);
 
     /**
@@ -41,14 +55,18 @@ public:
     void add_connection_listener(boost::function<void()> handler);
 
     void push(ConstPacket& packet);
+    UDTSOCKET socket();
 
+private:
     /**
      * REQUIRE(internal socket is connected)
      */
-    void send(); // TODO private
+    void send();
 
-    void receive(); // TODO private
-    UDTSOCKET socket();
+    void receive();
+
+    void request_receive();
+    void request_send();
 
 private:
     UDTService& m_udt_service;

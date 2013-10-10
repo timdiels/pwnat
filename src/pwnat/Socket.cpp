@@ -23,7 +23,7 @@
 using namespace std;
 
 template<typename SocketType>
-Socket<SocketType>::Socket(SocketType& socket, NetworkPipe& pipe, boost::function<void()> death_callback) : 
+Socket<SocketType>::Socket(SocketType& socket, shared_ptr<NetworkPipe> pipe, boost::function<void()> death_callback) : 
     m_socket(socket),
     m_name("tcp socket"),
     m_death_callback(death_callback),
@@ -58,7 +58,7 @@ void Socket<SocketType>::handle_receive(const boost::system::error_code& error, 
     else {
         cout << m_name << " received " << bytes_transferred << endl;
         ConstPacket packet(m_receive_buffer.data(), bytes_transferred); // TODO can't we just hand it to a string object or such?
-        m_pipe.push(packet);
+        m_pipe->push(packet);
     }
 
     receive();

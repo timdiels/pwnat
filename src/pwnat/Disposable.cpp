@@ -17,40 +17,26 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#include "Disposable.h"
 
-template <typename chartype>
-class BasicPacket {
-public:
-    BasicPacket(chartype* data, size_t length) : 
-        m_data(data),
-        m_length(length)
-    {
+Disposable::Disposable() :
+    m_disposed(false)
+{
+}
+
+Disposable::~Disposable() {
+}
+
+bool Disposable::dispose() {
+    if (m_disposed) {
+        return false;
     }
-
-    chartype* data() {
-        return m_data;
+    else {
+        m_disposed = true;
+        return true;
     }
+}
 
-    size_t length() {
-        return m_length;
-    }
-
-
-private:
-    chartype* m_data;
-    size_t m_length;
-};
-
-typedef BasicPacket<char> Packet;
-typedef BasicPacket<const char> ConstPacket;
-
-class NetworkPipe {
-public:
-    virtual ~NetworkPipe() {}
-
-    /**
-     * Push packet of given length onto pipe
-     */
-    virtual void push(ConstPacket&) = 0;
-};
+bool Disposable::disposed() {
+    return m_disposed;
+}

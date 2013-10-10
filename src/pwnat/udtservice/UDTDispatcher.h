@@ -21,21 +21,28 @@
 
 #include <boost/asio.hpp>
 #include <boost/function.hpp>
+#include <boost/thread.hpp>
 #include "UDTEventPoller.h"
 
 class UDTSocket;
 
 /**
  * Dispatches one kind of UDT event to UDTSockets
+ *
+ * request_register and process_requests are thread safe. The other methods are
+ * not, though they can safely be called while other threads are calling
+ * request_register, process_requests.
  */
 class UDTDispatcher {
 public:
     UDTDispatcher(boost::asio::io_service&, UDTEventPoller&, EPOLLOpt);
 
+    void request_register(UDTSOCKET socket, boost::function<void()> callback);
+
     /**
-     * Register socket to send events to
+     * Process registration requests
      */
-    void register_(UDTSOCKET, boost::function<void()> callback);
+    void process_requests();
 
     /**
      * Register socket again with underlying poller/services
@@ -49,16 +56,24 @@ public:
      */
     void dispatch(UDTSOCKET);
 
-private:
     /**
      * Side-effect: if other dispatchers are using this socket, you must reregister the socket with them
      */
     void unregister(UDTSOCKET);
 
 private:
+    /**
+     * Register socket to send events to
+     */
+    void register_(UDTSOCKET, boost::function<void()> callback);
+
+private:
     boost::asio::io_service& m_io_service;
     UDTEventPoller m_event_poller;
     const EPOLLOpt m_event;
     std::map<UDTSOCKET, boost::function<void()>> m_callbacks;
+
+    boost::mutex m_requests_lock;
+    std::vector<std::pair<UDTSOCKET, boost::function<void()>>> m_requests;
 };
 

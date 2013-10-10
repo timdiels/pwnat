@@ -30,61 +30,65 @@ UDTService::UDTService(boost::asio::io_service& io_service) :
 {
 }
 
-void UDTService::request_receive(UDTSocket& socket) {
-    boost::lock_guard<boost::mutex> guard(m_requests_lock);
-    m_requests.push_back(make_pair(&socket, UDT_EPOLL_IN));
+void UDTService::request_receive(UDTSOCKET socket, boost::function<void()> callback) {
+    m_receive_dispatcher.request_register(socket, callback);
 }
 
-void UDTService::request_send(UDTSocket& socket) {
-    boost::lock_guard<boost::mutex> guard(m_requests_lock);
-    m_requests.push_back(make_pair(&socket, UDT_EPOLL_OUT));
+void UDTService::request_send(UDTSOCKET socket, boost::function<void()> callback) {
+    m_send_dispatcher.request_register(socket, callback);
+}
+
+void UDTService::request_unregister(UDTSOCKET socket) {
+    boost::lock_guard<boost::mutex> guard(m_unregister_requests_lock);
+    m_unregister_requests.push_back(socket);
 }
 
 void UDTService::run() {
-    cout << "UDT service thread started" << endl;
+    try {
+        cout << "UDT service thread started" << endl;
 
-    set<UDTSOCKET> receive_events; // sockets that can receive
-    set<UDTSOCKET> send_events; // sockets that can send
+        set<UDTSOCKET> receive_events; // sockets that can receive
+        set<UDTSOCKET> send_events; // sockets that can send
 
-    /*
-     * epoll_wait notes:
-     * - a socket is returned in receive events <=> socket has data waiting for it in the receive buffer
-     * - a socket is returned in send events <=> socket has room for new data in its send buffer (this is called over and over if you'd leave the socket registered to the write event with no data to send)
-     */
-    while (true) {
-        cout << ".";
-        m_event_poller.wait(receive_events, send_events);
+        /*
+         * epoll_wait notes:
+         * - a socket is returned in receive events <=> socket has data waiting for it in the receive buffer
+         * - a socket is returned in send events <=> socket has room for new data in its send buffer (this is called over and over if you'd leave the socket registered to the write event with no data to send)
+         */
+        while (true) {
+            m_event_poller.wait(receive_events, send_events);
 
-        // Dispatch events to sockets that can read
-        for (auto socket_handle : receive_events) {
-            m_receive_dispatcher.dispatch(socket_handle);
-            m_send_dispatcher.reregister(socket_handle);
+            // Dispatch events to sockets that can read
+            for (auto socket_handle : receive_events) {
+                m_receive_dispatcher.dispatch(socket_handle);
+                m_send_dispatcher.reregister(socket_handle);
+            }
+
+            // Dispatch events to sockets that can write
+            for (auto socket_handle : send_events) {
+                m_send_dispatcher.dispatch(socket_handle);
+                m_receive_dispatcher.reregister(socket_handle);
+            }
+
+            // Process pending requests
+            process_requests();
         }
-
-        // Dispatch events to sockets that can write
-        for (auto socket_handle : send_events) {
-            m_send_dispatcher.dispatch(socket_handle);
-            m_receive_dispatcher.reregister(socket_handle);
-        }
-
-        // Process pending registrations
-        process_requests();
+    }
+    catch (const exception& e) {
+        cerr << "UDT service thread crashed: " << e.what() << endl;
+        abort();
     }
 }
 
 void UDTService::process_requests() {
-    boost::lock_guard<boost::mutex> guard(m_requests_lock);
-    for (auto request : m_requests) {
-        UDTSocket* socket = request.first;
+    m_receive_dispatcher.process_requests();
+    m_send_dispatcher.process_requests();
 
-        if (request.second == UDT_EPOLL_IN) {
-            m_receive_dispatcher.register_(socket->socket(), boost::bind(&UDTSocket::receive, socket));
-        }
-        else {
-            assert(request.second == UDT_EPOLL_OUT);
-            m_send_dispatcher.register_(socket->socket(), boost::bind(&UDTSocket::send, socket));
-        }
+    boost::lock_guard<boost::mutex> guard(m_unregister_requests_lock);
+    for (auto socket : m_unregister_requests) {
+        m_receive_dispatcher.unregister(socket);
+        m_send_dispatcher.unregister(socket);
     }
-    m_requests.clear();
+    m_unregister_requests.clear();
 }
 
