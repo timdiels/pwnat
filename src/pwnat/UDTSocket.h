@@ -21,6 +21,7 @@
 
 #include <udt/udt.h>
 #include <boost/asio.hpp>
+#include <boost/function.hpp>
 #include "NetworkPipe.h"
 
 class UDTService;
@@ -30,11 +31,23 @@ class UDTService;
  */
 class UDTSocket : public NetworkPipe {
 public:
-    UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination, NetworkPipe& pipe);
+    UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination);
 
-    void receive();
+    void pipe(NetworkPipe& pipe);
+
+    /**
+     * Call handler once once connection is established
+     */
+    void add_connection_listener(boost::function<void()> handler);
+
     void push(ConstPacket& packet);
-    void send();
+
+    /**
+     * REQUIRE(internal socket is connected)
+     */
+    void send(); // TODO private
+
+    void receive(); // TODO private
     UDTSOCKET socket();
 
 private:
@@ -42,8 +55,11 @@ private:
     UDTSOCKET m_socket;
     std::string m_name;
 
+    bool m_connected;
+    std::vector<boost::function<void()>> m_connection_listeners;
+
     // receive
-    NetworkPipe& m_pipe;
+    NetworkPipe* m_pipe;
 
     // send
     boost::asio::streambuf m_buffer;

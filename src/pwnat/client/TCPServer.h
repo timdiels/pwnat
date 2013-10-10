@@ -22,7 +22,7 @@
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <pwnat/udtservice/UDTService.h>
-#include "ConnectingTCPClient.h"
+#include "TCPClient.h"
 
 using namespace std;
 
@@ -47,7 +47,7 @@ public:
         }
         else {
             cout << "New tcp client at port " << tcp_socket->remote_endpoint().port() << endl;
-            new ConnectingTCPClient(m_udt_service, tcp_socket);  // Note: ownership of socket transferred to TCPClient instance
+            new TCPClient(m_udt_service, tcp_socket);  // Note: ownership of socket transferred to TCPClient instance
         }
 
         accept();

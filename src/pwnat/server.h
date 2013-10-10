@@ -36,19 +36,43 @@ class UDTClient { // TODO rename ProxyClient
 public:
     UDTClient(boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 destination) : 
         m_tcp_socket(io_service),
-        m_tcp_sender(m_tcp_socket, "tcp sender"),
-        m_udt_socket(udt_service, udp_port_s, udp_port_c, destination, m_tcp_sender),
+        m_tcp_sender(nullptr),
+        m_udt_socket(udt_service, udp_port_s, udp_port_c, destination),
 
-        m_tcp_receiver(m_tcp_socket, m_udt_socket, "tcp receiver")
+        m_tcp_receiver(nullptr)
     {
-        m_tcp_socket.connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u)); // TODO async when udt client connects
+        auto callback = boost::bind(&UDTClient::handle_tcp_connected, this, boost::asio::placeholders::error);
+        m_tcp_socket.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u), callback); // TODO async when udt client connects
+    }
+
+    virtual ~UDTClient() {
+        if (m_tcp_receiver) {
+            delete m_tcp_receiver;
+        }
+        if (m_tcp_sender) {
+            delete m_tcp_sender;
+        }
+    }
+
+private:
+    void handle_tcp_connected(boost::system::error_code error) {
+        if (error) {
+            cout << "tcp failed to connect" << endl;
+            abort(); // TODO one day we'll have to implement more robust handling than a simple abort
+            // TODO we'll also want logging of various verbosity levels
+        }
+        else {
+            m_tcp_receiver = new TCPReceiver(m_tcp_socket, m_udt_socket, "tcp receiver");
+            m_tcp_sender = new TCPSender(m_tcp_socket, "tcp sender");
+            m_udt_socket.pipe(*m_tcp_sender);
+        }
     }
 
 private:
     boost::asio::ip::tcp::socket m_tcp_socket;
-    TCPSender m_tcp_sender;
+    TCPSender* m_tcp_sender;
     UDTSocket m_udt_socket;
-    TCPReceiver m_tcp_receiver;
+    TCPReceiver* m_tcp_receiver;
 };
 
 /**

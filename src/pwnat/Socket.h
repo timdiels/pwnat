@@ -77,6 +77,9 @@ public:
     {
     }
 
+    virtual ~Sender() {
+    }
+
     void push(ConstPacket& packet) {
         ostream ostr(&m_buffer);
         ostr.write(packet.data(), packet.length());

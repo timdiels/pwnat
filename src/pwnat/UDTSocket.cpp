@@ -23,11 +23,12 @@
 
 using namespace std;
 
-UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination, NetworkPipe& pipe) :
+UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination) :
     m_udt_service(udt_service),
     m_socket(UDT::socket(AF_INET, SOCK_STREAM, 0)),
     m_name("UDT socket"),  // TODO include src->dst port in name
-    m_pipe(pipe)
+    m_connected(false),
+    m_pipe(nullptr)
 {
     assert(m_socket != UDT::INVALID_SOCK); // TODO exception throw
 
@@ -45,22 +46,26 @@ UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t d
         abort();
     }
 
-    // TODO connecting can take a while (bind is instant), we should figure out how to do this in an async manner
+    bool non_blocking_mode = false;
+    UDT::setsockopt(m_socket, 0, UDT_SNDSYN, &non_blocking_mode, sizeof(bool));
+    UDT::setsockopt(m_socket, 0, UDT_RCVSYN, &non_blocking_mode, sizeof(bool));
+
+    m_udt_service.request_receive(*this);
+    m_udt_service.request_send(*this); // this is to find out when we're connected
+
     localhost.sin_addr.s_addr = htonl(destination.to_ulong());
     localhost.sin_port = htons(destination_port);
     if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
         cerr << "udt connect error: " << UDT::getlasterror().getErrorMessage() << endl;
         abort();
     }
-
-    bool non_blocking_mode = false;
-    UDT::setsockopt(m_socket, 0, UDT_SNDSYN, &non_blocking_mode, sizeof(bool));
-    UDT::setsockopt(m_socket, 0, UDT_RCVSYN, &non_blocking_mode, sizeof(bool));
-
-    m_udt_service.request_receive(*this);
 }
 
 void UDTSocket::receive() {
+    if (!m_pipe) {
+        return;
+    }
+
     boost::array<char, 64 * 1024> buffer; // allocate buffer to more or less the max an IP packet can carry
 
     cout << "receiving" << endl;
@@ -76,7 +81,7 @@ void UDTSocket::receive() {
     else {
         cout << m_name << " received " << bytes_transferred << endl;
         ConstPacket packet(buffer.data(), bytes_transferred);
-        m_pipe.push(packet);
+        m_pipe->push(packet);
     }
 
     // always request to receive more
@@ -86,10 +91,34 @@ void UDTSocket::receive() {
 void UDTSocket::push(ConstPacket& packet) {
     ostream ostr(&m_buffer);
     ostr.write(packet.data(), packet.length());
-    send();
+    if (m_connected) {
+        send();
+    }
+}
+
+void UDTSocket::add_connection_listener(boost::function<void()> handler) {
+    if (m_connected) {
+        handler();
+    }
+    else {
+        m_connection_listeners.push_back(handler);
+    }
+}
+
+void UDTSocket::pipe(NetworkPipe& pipe) {
+    m_pipe = &pipe;
+    m_udt_service.request_receive(*this);
 }
 
 void UDTSocket::send() {
+    if (!m_connected) {
+        m_connected = true;
+        for (auto handler : m_connection_listeners) {
+            handler();
+        }
+        m_connection_listeners.clear();
+    }
+
     if (m_buffer.size() == 0) {
         return;
     }
