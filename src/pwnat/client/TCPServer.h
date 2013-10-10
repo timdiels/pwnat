@@ -26,6 +26,7 @@ class TCPServer {
 public:
     TCPServer(boost::asio::io_service& io_service);
 
+private:
     void accept();
     void handle_accept(const boost::system::error_code& error, boost::asio::ip::tcp::socket* tcp_socket);
 

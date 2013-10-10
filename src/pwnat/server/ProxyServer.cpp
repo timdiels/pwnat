@@ -105,10 +105,15 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
             boost::asio::ip::address_v4 client_address(ntohl(ip_header->ip_src.s_addr));
             if (m_clients.find(client_address) == m_clients.end()) {
                 cout << "Accepting new proxy client" << endl;
-                m_clients[client_address] = new ProxyClient(m_io_service, m_udt_service, client_address);
+                m_clients[client_address] = new ProxyClient(*this, m_io_service, m_udt_service, client_address);
             }
         }
     }
 
     start_receive();
+}
+
+void ProxyServer::kill_client(ProxyClient& client) {
+    m_clients.erase(client.address());
+    delete &client;
 }

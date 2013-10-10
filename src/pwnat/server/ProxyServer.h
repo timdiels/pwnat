@@ -34,6 +34,7 @@ public:
     ~ProxyServer();
 
     void run(); // TODO rm
+    void kill_client(ProxyClient&);
 
 private:
     void send_icmp_echo();

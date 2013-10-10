@@ -27,7 +27,7 @@ using namespace std;
 
 TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket) :
     m_udt_socket(udt_service, udp_port_c, udp_port_s, boost::asio::ip::address_v4::from_string("127.0.0.1")),
-    m_tcp_socket(*tcp_socket, m_udt_socket), 
+    m_tcp_socket(*tcp_socket, m_udt_socket, boost::bind(&TCPClient::die, this)), 
     m_icmp_socket(tcp_socket->get_io_service(), boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
     m_icmp_timer(tcp_socket->get_io_service())
 {
@@ -41,6 +41,11 @@ TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_
 
 TCPClient::~TCPClient() {
     delete &m_tcp_socket.socket();
+}
+
+void TCPClient::die() {
+    cerr << "TCPClient died" << endl;
+    delete this;
 }
 
 void TCPClient::build_icmp_ttl_exceeded() {
@@ -86,7 +91,7 @@ void TCPClient::handle_icmp_timer_expired(const boost::system::error_code& error
     if (error) {
         if (error.value() != boost::asio::error::operation_aborted) {  // aborted = timer cancelled
             cerr << "Unexpected timer error: " << error.message() << endl;
-            abort();
+            die();
         }
     }
     else {

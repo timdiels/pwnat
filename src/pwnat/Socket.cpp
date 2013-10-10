@@ -19,14 +19,14 @@
 
 #include "Socket.h"
 #include <boost/bind.hpp>
-// TODO coroutine lib still needed in cmake?
 
 using namespace std;
 
 template<typename SocketType>
-Socket<SocketType>::Socket(SocketType& socket, NetworkPipe& pipe) : 
+Socket<SocketType>::Socket(SocketType& socket, NetworkPipe& pipe, boost::function<void()> death_callback) : 
     m_socket(socket),
     m_name("tcp socket"),
+    m_death_callback(death_callback),
     m_pipe(pipe)
 {
     receive();
@@ -52,7 +52,8 @@ template<typename SocketType>
 void Socket<SocketType>::handle_receive(const boost::system::error_code& error, size_t bytes_transferred) {
     if (error) {
         cerr << m_name << ": receive error: " << error.message() << endl;
-        abort();
+        m_death_callback();
+        return;
     }
     else {
         cout << m_name << " received " << bytes_transferred << endl;
@@ -82,7 +83,8 @@ template<typename SocketType>
 void Socket<SocketType>::handle_send(const boost::system::error_code& error, size_t bytes_transferred) {
     if (error) {
         cerr << m_name << ": send error: " << error.message() << endl;
-        abort();
+        m_death_callback();
+        return;
     }
     else {
         cout << m_name << " sent " << bytes_transferred << endl;

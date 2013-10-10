@@ -22,13 +22,16 @@
 #include <boost/array.hpp>
 #include <pwnat/udtservice/UDTService.h>
 #include <pwnat/constants.h>
+#include "ProxyServer.h"
 
 using namespace std;
 
-ProxyClient::ProxyClient(boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 destination) : 
+ProxyClient::ProxyClient(ProxyServer& server, boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 address) : 
+    m_server(server),
+    m_address(address),
     m_tcp_socket_(io_service),
     m_tcp_socket(nullptr),
-    m_udt_socket(udt_service, udp_port_s, udp_port_c, destination)
+    m_udt_socket(udt_service, udp_port_s, udp_port_c, m_address)
 {
     auto callback = boost::bind(&ProxyClient::handle_tcp_connected, this, boost::asio::placeholders::error);
     m_tcp_socket_.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u), callback); // TODO async when udt client connects
@@ -38,17 +41,26 @@ ProxyClient::~ProxyClient() {
     if (m_tcp_socket) {
         delete m_tcp_socket;
     }
+    cerr << "ProxyClient died" << endl;
+}
+
+boost::asio::ip::address_v4 ProxyClient::address() {
+    return m_address;
+}
+
+void ProxyClient::die() {
+    m_server.kill_client(*this);
 }
 
 void ProxyClient::handle_tcp_connected(boost::system::error_code error) {
     if (error) {
-        cout << "tcp failed to connect" << endl;
-        abort(); // TODO instead, tell ProxyServer to delete us (similar things will need to happen when sockets close)
+        cerr << "tcp socket failed to connect: " << error.message() << endl;
+        die();
         // TODO one day we'll have to implement more robust handling than a simple abort
         // TODO we'll also want logging of various verbosity levels
     }
     else {
-        m_tcp_socket = new TCPSocket(m_tcp_socket_, m_udt_socket);
+        m_tcp_socket = new TCPSocket(m_tcp_socket_, m_udt_socket, boost::bind(&ProxyClient::die, this));
         m_udt_socket.pipe(*m_tcp_socket);
     }
 }

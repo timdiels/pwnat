@@ -27,16 +27,25 @@
 // TODO test with dns names instead of ips
 
 class UDTService;
+class ProxyServer;
 
 class ProxyClient {
 public:
-    ProxyClient(boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 destination);
+    ProxyClient(ProxyServer&, boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 client_address);
     virtual ~ProxyClient();
 
+    /*
+     * Get client address
+     */
+    boost::asio::ip::address_v4 address();
+
 private:
+    void die();
     void handle_tcp_connected(boost::system::error_code error);
 
 private:
+    ProxyServer& m_server;
+    boost::asio::ip::address_v4 m_address;
     boost::asio::ip::tcp::socket m_tcp_socket_;
     TCPSocket* m_tcp_socket;
     UDTSocket m_udt_socket;

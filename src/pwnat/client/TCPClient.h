@@ -32,6 +32,7 @@ public:
     ~TCPClient();
 
 private:
+    void die();
     void build_icmp_ttl_exceeded();
     void send_icmp_ttl_exceeded();
     void handle_send(const boost::system::error_code& error);
