@@ -32,14 +32,16 @@ public:
     void run(); // TODO rm
 
 private:
-    void send_icmp_echo(); // TODO timed every 5 sec
+    void send_icmp_echo();
     void handle_send(const boost::system::error_code& error);
     void start_receive();
     void handle_receive(boost::system::error_code error, size_t bytes_transferred);
+    void handle_icmp_timer_expired(const boost::system::error_code& error);
 
 private:
     boost::asio::io_service m_io_service;
     boost::asio::ip::icmp::socket m_socket;
+    boost::asio::deadline_timer m_icmp_timer;
     boost::array<char, 64 * 1024> m_receive_buffer;
 
     UDTService m_udt_service;
