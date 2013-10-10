@@ -19,28 +19,26 @@
 
 #pragma once
 
+#include "ProxyClient.h"
 #include <boost/asio.hpp>
 #include <pwnat/UDTSocket.h>
 #include <pwnat/Socket.h>
-#include <pwnat/packet.h>
+
+// TODO test with dns names instead of ips
 
 class UDTService;
 
-class TCPClient {
+class ProxyClient {
 public:
-    TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket);
-    ~TCPClient();
+    ProxyClient(boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 destination);
+    virtual ~ProxyClient();
 
 private:
-    void build_icmp_ttl_exceeded();
-    void send_icmp_ttl_exceeded();
-    void handle_send(const boost::system::error_code& error);
-    void handle_connected();
+    void handle_tcp_connected(boost::system::error_code error);
 
 private:
+    boost::asio::ip::tcp::socket m_tcp_socket_;
+    TCPSocket* m_tcp_socket;
     UDTSocket m_udt_socket;
-    TCPSocket m_tcp_socket;
-
-    boost::asio::ip::icmp::socket m_icmp_socket;
-    icmp_ttl_exceeded m_icmp_ttl_exceeded;
 };
+

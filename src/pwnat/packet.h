@@ -19,6 +19,9 @@
 
 #pragma once
 
+#include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
+
 /**
  * Declarations of packets
  */

@@ -20,7 +20,7 @@
 #include <signal.h>
 #include <udt/udt.h>
 #include "client/Client.h"
-#include "server.h"
+#include "server/ProxyServer.h"
 
 void signal_handler(int sig);
 
@@ -43,7 +43,7 @@ int udpserver(int argc, char *argv[])
         }
         else {
             // pretend to be server
-            Server server;
+            ProxyServer server;
             server.run();
         }
 

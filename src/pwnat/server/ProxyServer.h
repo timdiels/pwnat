@@ -20,27 +20,28 @@
 #pragma once
 
 #include <boost/asio.hpp>
-#include <pwnat/UDTSocket.h>
-#include <pwnat/Socket.h>
-#include <pwnat/packet.h>
+#include <boost/array.hpp>
+#include <pwnat/udtservice/UDTService.h>
 
-class UDTService;
-
-class TCPClient {
+/**
+ * Listens for new ProxyClients using pwnat ICMP trickery
+ */
+class ProxyServer {
 public:
-    TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket);
-    ~TCPClient();
+    ProxyServer();
+    void run(); // TODO rm
 
 private:
-    void build_icmp_ttl_exceeded();
-    void send_icmp_ttl_exceeded();
+    void send_icmp_echo(); // TODO timed every 5 sec
     void handle_send(const boost::system::error_code& error);
-    void handle_connected();
+    void start_receive();
+    void handle_receive(boost::system::error_code error, size_t bytes_transferred);
 
 private:
-    UDTSocket m_udt_socket;
-    TCPSocket m_tcp_socket;
+    boost::asio::io_service m_io_service;
+    boost::asio::ip::icmp::socket m_socket;
+    boost::array<char, 64 * 1024> m_receive_buffer;
 
-    boost::asio::ip::icmp::socket m_icmp_socket;
-    icmp_ttl_exceeded m_icmp_ttl_exceeded;
+    UDTService m_udt_service;
 };
+
