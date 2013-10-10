@@ -29,12 +29,19 @@ Socket<SocketType>::Socket(SocketType& socket, shared_ptr<NetworkPipe> pipe, boo
     m_death_callback(death_callback),
     m_pipe(pipe)
 {
-    receive();
 }
-// TODO name + tcp client port, or no names, or name defaults to: proto sender/receiver src->dst port (let's do that latter)
 
 template<typename SocketType>
 Socket<SocketType>::~Socket() {
+    dispose();
+    cout << m_name << ": deallocated" << endl;
+}
+
+template<typename SocketType>
+void Socket<SocketType>::dispose() {
+    if (Disposable::dispose()) {
+        m_pipe.reset();
+    }
 }
 
 template<typename SocketType>
@@ -43,13 +50,20 @@ SocketType& Socket<SocketType>::socket() {
 }
 
 template<typename SocketType>
+void Socket<SocketType>::init() {
+    receive();
+}
+
+template<typename SocketType>
 void Socket<SocketType>::receive() {
-    auto callback = boost::bind(&Socket::handle_receive, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
+    if (disposed()) return;
+    auto callback = boost::bind(&Socket::handle_receive, this->shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
     m_socket.async_receive(boost::asio::buffer(m_receive_buffer), callback);
 }
 
 template<typename SocketType>
 void Socket<SocketType>::handle_receive(const boost::system::error_code& error, size_t bytes_transferred) {
+    if (disposed()) return;
     if (error) {
         cerr << m_name << ": receive error: " << error.message() << endl;
         m_death_callback();
@@ -66,6 +80,7 @@ void Socket<SocketType>::handle_receive(const boost::system::error_code& error, 
 
 template<typename SocketType>
 void Socket<SocketType>::push(ConstPacket& packet) {
+    if (disposed()) return;
     ostream ostr(&m_send_buffer);
     ostr.write(packet.data(), packet.length());
     send();
@@ -73,14 +88,16 @@ void Socket<SocketType>::push(ConstPacket& packet) {
 
 template<typename SocketType>
 void Socket<SocketType>::send() {
+    if (disposed()) return;
     if (m_send_buffer.size() > 0) {
-        auto callback = boost::bind(&Socket::handle_send, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
+        auto callback = boost::bind(&Socket::handle_send, this->shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
         m_socket.async_send(m_send_buffer.data(), callback);
     }
 }
 
 template<typename SocketType>
 void Socket<SocketType>::handle_send(const boost::system::error_code& error, size_t bytes_transferred) {
+    if (disposed()) return;
     if (error) {
         cerr << m_name << ": send error: " << error.message() << endl;
         m_death_callback();

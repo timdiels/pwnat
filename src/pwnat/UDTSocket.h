@@ -38,7 +38,7 @@ class UDTService;
  */
 class UDTSocket : public NetworkPipe, public Disposable, public std::enable_shared_from_this<UDTSocket> {
 public:
-    UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination);
+    UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination, boost::function<void()> death_callback);
 
     /**
      * Closes the socket
@@ -47,7 +47,7 @@ public:
 
     void init();
     void dispose();
-    void pipe(NetworkPipe& pipe);
+    void pipe(std::shared_ptr<NetworkPipe> pipe);
 
     /**
      * Call handler once once connection is established
@@ -58,17 +58,14 @@ public:
     UDTSOCKET socket();
 
 private:
-    /**
-     * REQUIRE(internal socket is connected)
-     */
-    void send();
-
     void receive();
+    void send();
 
     void request_receive();
     void request_send();
 
 private:
+    boost::function<void()> m_death_callback;
     UDTService& m_udt_service;
     UDTSOCKET m_socket;
     std::string m_name;
@@ -77,7 +74,7 @@ private:
     std::vector<boost::function<void()>> m_connection_listeners;
 
     // receive
-    NetworkPipe* m_pipe;
+    std::shared_ptr<NetworkPipe> m_pipe;
 
     // send
     boost::asio::streambuf m_buffer;

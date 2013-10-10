@@ -42,7 +42,7 @@ private:
 
 private:
     std::shared_ptr<UDTSocket> m_udt_socket;
-    TCPSocket m_tcp_socket;
+    std::shared_ptr<TCPSocket> m_tcp_socket;
 
     boost::asio::ip::icmp::socket m_icmp_socket;
     boost::asio::deadline_timer m_icmp_timer;

@@ -30,8 +30,7 @@ ProxyClient::ProxyClient(ProxyServer& server, boost::asio::io_service& io_servic
     m_server(server),
     m_address(address),
     m_tcp_socket_(io_service),
-    m_tcp_socket(nullptr),
-    m_udt_socket(make_shared<UDTSocket>(udt_service, udp_port_s, udp_port_c, m_address))
+    m_udt_socket(make_shared<UDTSocket>(udt_service, udp_port_s, udp_port_c, m_address, boost::bind(&ProxyClient::die, this)))
 {
     auto callback = boost::bind(&ProxyClient::handle_tcp_connected, this, boost::asio::placeholders::error);
     m_tcp_socket_.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u), callback);
@@ -40,11 +39,9 @@ ProxyClient::ProxyClient(ProxyServer& server, boost::asio::io_service& io_servic
 }
 
 ProxyClient::~ProxyClient() {
+    cerr << "ProxyClient deallocating" << endl;
     m_udt_socket->dispose();
-    if (m_tcp_socket) {
-        delete m_tcp_socket;
-    }
-    cerr << "ProxyClient died" << endl;
+    m_tcp_socket->dispose();
 }
 
 boost::asio::ip::address_v4 ProxyClient::address() {
@@ -63,7 +60,8 @@ void ProxyClient::handle_tcp_connected(boost::system::error_code error) {
         // TODO we'll also want logging of various verbosity levels
     }
     else {
-        m_tcp_socket = new TCPSocket(m_tcp_socket_, m_udt_socket, boost::bind(&ProxyClient::die, this));
-        m_udt_socket->pipe(*m_tcp_socket);
+        m_tcp_socket = make_shared<TCPSocket>(m_tcp_socket_, m_udt_socket, boost::bind(&ProxyClient::die, this));
+        m_tcp_socket->init();
+        m_udt_socket->pipe(m_tcp_socket);
     }
 }

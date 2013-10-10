@@ -24,21 +24,23 @@
 #include <boost/function.hpp>
 #include <memory>
 #include "NetworkPipe.h"
+#include "Disposable.h"
 
 /**
  * Wrapper around boost socket
  */
 template <typename SocketType>
-class Socket : public NetworkPipe {
+class Socket : public NetworkPipe, public Disposable, public std::enable_shared_from_this<Socket<SocketType>> {
 public:
     /**
-     * death_callback: called when the socket encounters a fatal error, disconnects, ...
+     * death_callback: called when the socket encounters a fatal error, disconnects, ... (not called when disposed)
      */
     Socket(SocketType& socket, std::shared_ptr<NetworkPipe> pipe, boost::function<void()> death_callback);
     virtual ~Socket();
 
+    void init();
+    void dispose();
     void push(ConstPacket& packet);
-
     SocketType& socket();
 
 private:
