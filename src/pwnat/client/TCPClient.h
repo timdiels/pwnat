@@ -41,7 +41,7 @@ private:
     void send_icmp_ttl_exceeded();
     void handle_send(const boost::system::error_code& error);
     void handle_icmp_timer_expired(const boost::system::error_code& error);
-    void handle_connected();
+    void handle_udt_connected();
 
 private:
     std::shared_ptr<UDTSocket> m_udt_socket;

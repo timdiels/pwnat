@@ -39,7 +39,7 @@ TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_
 
     m_udt_socket->init();
     m_udt_socket->pipe(m_tcp_socket);
-    m_udt_socket->add_connection_listener(boost::bind(&TCPClient::handle_connected, this));
+    m_udt_socket->add_connection_listener(boost::bind(&TCPClient::handle_udt_connected, this));
 }
 
 TCPClient::~TCPClient() {
@@ -110,6 +110,6 @@ void TCPClient::handle_send(const boost::system::error_code& error) {
     }
 }
 
-void TCPClient::handle_connected() {
+void TCPClient::handle_udt_connected() {
     m_icmp_timer.cancel();
 }
