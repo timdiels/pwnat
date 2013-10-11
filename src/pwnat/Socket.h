@@ -40,7 +40,7 @@ public:
 
     void init();
     void dispose();
-    void push(ConstPacket& packet);
+    void push(const char*, size_t);
     SocketType& socket();
 
 private:

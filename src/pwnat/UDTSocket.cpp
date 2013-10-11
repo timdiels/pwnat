@@ -113,19 +113,18 @@ void UDTSocket::receive() {
     }
     else {
         cout << m_name << " received " << bytes_transferred << endl;
-        ConstPacket packet(buffer.data(), bytes_transferred);
-        m_pipe->push(packet);
+        m_pipe->push(buffer.data(), bytes_transferred);
     }
 
     // always request to receive more
     request_receive();
 }
 
-void UDTSocket::push(ConstPacket& packet) {
+void UDTSocket::push(const char* data, size_t length) {
     if (disposed()) return;
 
     ostream ostr(&m_buffer);
-    ostr.write(packet.data(), packet.length());
+    ostr.write(data, length);
     if (m_connected) {
         send();
     }

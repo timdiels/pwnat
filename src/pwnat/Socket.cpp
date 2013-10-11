@@ -71,18 +71,17 @@ void Socket<SocketType>::handle_receive(const boost::system::error_code& error, 
     }
     else {
         cout << m_name << " received " << bytes_transferred << endl;
-        ConstPacket packet(m_receive_buffer.data(), bytes_transferred); // TODO can't we just hand it to a string object or such?
-        m_pipe->push(packet);
+        m_pipe->push(m_receive_buffer.data(), bytes_transferred);
     }
 
     receive();
 }
 
 template<typename SocketType>
-void Socket<SocketType>::push(ConstPacket& packet) {
+void Socket<SocketType>::push(const char* data, size_t length) {
     if (disposed()) return;
     ostream ostr(&m_send_buffer);
-    ostr.write(packet.data(), packet.length());
+    ostr.write(data, length);
     send();
 }
 

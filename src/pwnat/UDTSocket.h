@@ -54,7 +54,7 @@ public:
      */
     void add_connection_listener(boost::function<void()> handler);
 
-    void push(ConstPacket& packet);
+    void push(const char*, size_t);
     UDTSOCKET socket();
 
 private:

@@ -19,38 +19,12 @@
 
 #pragma once
 
-template <typename chartype>
-class BasicPacket {
-public:
-    BasicPacket(chartype* data, size_t length) : 
-        m_data(data),
-        m_length(length)
-    {
-    }
-
-    chartype* data() {
-        return m_data;
-    }
-
-    size_t length() {
-        return m_length;
-    }
-
-
-private:
-    chartype* m_data;
-    size_t m_length;
-};
-
-typedef BasicPacket<char> Packet;
-typedef BasicPacket<const char> ConstPacket;
-
 class NetworkPipe {
 public:
     virtual ~NetworkPipe() {}
 
     /**
-     * Push packet of given length onto pipe
+     * Push data of given length along pipe
      */
-    virtual void push(ConstPacket&) = 0;
+    virtual void push(const char* data, size_t length) = 0;
 };
