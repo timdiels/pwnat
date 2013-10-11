@@ -30,3 +30,12 @@ struct icmp_ttl_exceeded {
     ip ip_header;
     icmphdr original_icmp;
 };
+
+/**
+ * ProxyClient sends this to ProxyServer to initialize a newly connected UDT flow
+ */
+struct udt_flow_init {
+    u_int16_t size; // size of flow_init, including remote_host chars
+    u_int16_t remote_port;
+    // char* remote_host, not zero terminated
+};

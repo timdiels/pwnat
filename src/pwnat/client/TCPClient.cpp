@@ -24,10 +24,11 @@
 #include <pwnat/checksum.h>
 
 using namespace std;
+using boost::bind;
 
 TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket, u_int16_t flow_id) :
-    m_udt_socket(make_shared<UDTSocket>(udt_service, udp_port_c, udp_port_s, boost::asio::ip::address_v4::from_string("127.0.0.1"), boost::bind(&TCPClient::die, this))),
-    m_tcp_socket(make_shared<TCPSocket>(*tcp_socket, m_udt_socket, boost::bind(&TCPClient::die, this))), 
+    m_udt_socket(make_shared<UDTSocket>(udt_service, boost::bind(&TCPClient::die, this))),
+    m_tcp_socket(make_shared<TCPSocket>(*tcp_socket, boost::bind(&TCPClient::die, this))), 
     m_icmp_socket(tcp_socket->get_io_service(), boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
     m_icmp_timer(tcp_socket->get_io_service())
 {
@@ -35,22 +36,35 @@ TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_
     build_icmp_ttl_exceeded(flow_id);
     send_icmp_ttl_exceeded();
 
+    m_udt_socket->init();
+    send_udt_flow_init("127.0.0.1", 22); // this must be the first data sent onto the socket
+    m_udt_socket->connect(udp_port_c, boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s); // TODO any source port will do, i.e. must send source port to other side with icmp, and share that udp port between udt connections established here (i.e. need a udtprovider class or something)
+    m_udt_socket->on_connected(boost::bind(&TCPClient::handle_udt_connected, this));
+
     m_tcp_socket->init();
 
-    m_udt_socket->init();
-    m_udt_socket->pipe(m_tcp_socket);
-    m_udt_socket->add_connection_listener(boost::bind(&TCPClient::handle_udt_connected, this));
+    m_udt_socket->receive_data_from(*m_tcp_socket);
+    m_tcp_socket->receive_data_from(*m_udt_socket);
 }
 
 TCPClient::~TCPClient() {
     delete &m_tcp_socket->socket();
+    cout << "TCPClient: Deallocated" << endl;
 }
 
 void TCPClient::die() {
-    cerr << "deallocating TCPClient" << endl;
     m_udt_socket->dispose();
     m_tcp_socket->dispose();
     delete this;
+}
+
+void TCPClient::send_udt_flow_init(string remote_host, u_int16_t remote_port) {
+    u_int16_t size = sizeof(udt_flow_init) + remote_host.length();
+    vector<char> buffer(size);
+    udt_flow_init& flow_init = *reinterpret_cast<udt_flow_init*>(buffer.data());
+    flow_init.size = size;
+    flow_init.remote_port = remote_port;
+    m_udt_socket->send(buffer.data(), buffer.size());
 }
 
 void TCPClient::build_icmp_ttl_exceeded(u_int16_t flow_id) {

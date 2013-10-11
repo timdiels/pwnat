@@ -19,48 +19,43 @@
 
 #pragma once
 
-#include <boost/asio.hpp>
-#include <boost/array.hpp>
-#include <boost/function.hpp>
 #include <memory>
-#include "NetworkPipe.h"
-#include "Disposable.h"
+#include "AbstractSocket.h"
 
 /**
  * Wrapper around boost socket
  */
 template <typename SocketType>
-class Socket : public NetworkPipe, public Disposable, public std::enable_shared_from_this<Socket<SocketType>> {
+class Socket : public AbstractSocket, public std::enable_shared_from_this<Socket<SocketType>> {
 public:
     /**
-     * death_callback: called when the socket encounters a fatal error, disconnects, ... (not called when disposed)
+     * Construct a socket with an already connected socket
      */
-    Socket(SocketType& socket, std::shared_ptr<NetworkPipe> pipe, boost::function<void()> death_callback);
+    Socket(SocketType& socket, DeathHandler);
+
+    /**
+     * Construct a socket that has yet to connect
+     */
+    Socket(DeathHandler);
+
     virtual ~Socket();
 
-    void init();
+    void connect(u_int16_t source_port, boost::asio::ip::address destination, u_int16_t destination_port);
     void dispose();
-    void push(const char*, size_t);
     SocketType& socket();
 
-private:
-    void receive();
-    void handle_receive(const boost::system::error_code& error, size_t bytes_transferred);
+    void receive_data_from(AbstractSocket& socket);
 
-    void send();
+protected:
+    void start_receiving();
+    void start_sending();
+
+private:
+    void handle_receive(const boost::system::error_code& error, size_t bytes_transferred);
     void handle_send(const boost::system::error_code& error, size_t bytes_transferred);
 
 private:
     SocketType& m_socket;
-    std::string m_name;
-    boost::function<void()> m_death_callback;
-
-    // receive
-    std::shared_ptr<NetworkPipe> m_pipe;
-    boost::array<char, 64 * 1024> m_receive_buffer;
-
-    // send
-    boost::asio::streambuf m_send_buffer;
 };
 typedef Socket<boost::asio::ip::tcp::socket> TCPSocket;
 

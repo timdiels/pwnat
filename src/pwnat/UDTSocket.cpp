@@ -19,24 +19,31 @@
 
 #include "UDTSocket.h"
 #include <cassert>
-#include <boost/array.hpp>
 #include "udtservice/UDTService.h"
 
 using namespace std;
+using boost::bind;
 
-UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t destination_port, boost::asio::ip::address_v4 destination, boost::function<void()> death_callback) :
-    m_death_callback(death_callback),
+UDTSocket::UDTSocket(UDTService& udt_service, DeathHandler death_handler) :
+    AbstractSocket(false, death_handler, "UDT socket"),
     m_udt_service(udt_service),
-    m_socket(UDT::socket(AF_INET, SOCK_STREAM, 0)),
-    m_name("UDT socket"),
-    m_connected(false),
-    m_pipe(nullptr)
+    m_socket(UDT::socket(AF_INET, SOCK_STREAM, 0))
 {
     if (m_socket == UDT::INVALID_SOCK) {
         cerr << m_name << ": Invalid UDTSOCKET" << endl;
-        m_death_callback();
+        die();
         return; // TODO maybe we should throw instead of return
     }
+}
+
+UDTSocket::~UDTSocket() {
+    UDT::close(m_socket);
+}
+
+void UDTSocket::connect(u_int16_t source_port, boost::asio::ip::address destination, u_int16_t destination_port) {
+    if (disposed()) return;
+    assert(!connected());
+    // TODO support ipv6, everywhere
 
     sockaddr_in localhost;
     localhost.sin_family = AF_INET;
@@ -49,7 +56,7 @@ UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t d
     localhost.sin_port = htons(source_port);
     if (UDT::ERROR == UDT::bind(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
         cerr << m_name << ": bind() error: " << UDT::getlasterror().getErrorMessage() << endl;
-        m_death_callback();
+        die();
         return;
     }
 
@@ -57,128 +64,85 @@ UDTSocket::UDTSocket(UDTService& udt_service, u_int16_t source_port, u_int16_t d
     UDT::setsockopt(m_socket, 0, UDT_SNDSYN, &non_blocking_mode, sizeof(bool));
     UDT::setsockopt(m_socket, 0, UDT_RCVSYN, &non_blocking_mode, sizeof(bool));
 
-    localhost.sin_addr.s_addr = htonl(destination.to_ulong());
+    localhost.sin_addr.s_addr = htonl(destination.to_v4().to_ulong());
     localhost.sin_port = htons(destination_port);
     if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
         cerr << m_name << ": connect() error: " << UDT::getlasterror().getErrorMessage() << endl;
-        m_death_callback();
+        die();
         return;
     }
+
+    // find out when we're connected
+    m_udt_service.request_send(m_socket, boost::bind(&UDTSocket::notify_connected, shared_from_this()));
 }
 
-UDTSocket::~UDTSocket() {
-    dispose();
-    UDT::close(m_socket);
-    cout << m_name << ": Deallocated" << endl;
+void UDTSocket::receive_data_from(AbstractSocket& socket) {
+    socket.on_received_data(bind(&UDTSocket::send, shared_from_this(), _1));
 }
 
-void UDTSocket::dispose() {
-    if (Disposable::dispose()) {
+bool UDTSocket::dispose() {
+    if (AbstractSocket::dispose()) {
         m_udt_service.request_unregister(m_socket);
-        m_pipe.reset();
+        return true;
+    }
+    else {
+        return false;
     }
 }
 
-void UDTSocket::init() {
+void UDTSocket::start_receiving() {
+    assert(connected());
+    m_udt_service.request_receive(m_socket, bind(&UDTSocket::handle_receive, shared_from_this()));
+}
+
+void UDTSocket::start_sending() {
+    assert(connected());
+    m_udt_service.request_send(m_socket, bind(&UDTSocket::handle_send, shared_from_this()));
+}
+
+void UDTSocket::handle_receive() {
     if (disposed()) return;
-    request_receive();
-    request_send(); // this is to find out when we're connected
-}
-
-void UDTSocket::request_receive() {
-    m_udt_service.request_receive(m_socket, boost::bind(&UDTSocket::receive, shared_from_this()));
-}
-
-void UDTSocket::request_send() {
-    m_udt_service.request_send(m_socket, boost::bind(&UDTSocket::send, shared_from_this()));
-}
-
-void UDTSocket::receive() {
-    if (disposed() || !m_pipe) {
-        return;
-    }
-
-    boost::array<char, 64 * 1024> buffer; // allocate buffer to more or less the max an IP packet can carry
 
     cout << "receiving" << endl;
-    int bytes_transferred = UDT::recv(m_socket, buffer.data(), buffer.size(), 0);
+    const size_t buffer_size = 64 * 1024;
+    int bytes_transferred = UDT::recv(m_socket, boost::asio::buffer_cast<char*>(m_receive_buffer.prepare(buffer_size)), buffer_size, 0);
     if (bytes_transferred == UDT::ERROR) {
         auto error = UDT::getlasterror();
         const int EASYNCRCV = 6002; // no data available to receive
         if (error.getErrorCode() != EASYNCRCV) {
             cerr << m_name << ": error: " << error.getErrorMessage() << endl;
-            m_death_callback();
+            die();
             return;
         }
     }
     else {
         cout << m_name << " received " << bytes_transferred << endl;
-        m_pipe->push(buffer.data(), bytes_transferred);
+        m_receive_buffer.commit(bytes_transferred);
+        notify_received_data();
     }
 
-    // always request to receive more
-    request_receive();
+    start_receiving();
 }
 
-void UDTSocket::push(const char* data, size_t length) {
-    if (disposed()) return;
+void UDTSocket::handle_send() {
+    if (disposed() || !connected() || m_send_buffer.size() == 0) return;
 
-    ostream ostr(&m_buffer);
-    ostr.write(data, length);
-    if (m_connected) {
-        send();
-    }
-}
-
-void UDTSocket::add_connection_listener(boost::function<void()> handler) {
-    if (disposed()) return;
-
-    if (m_connected) {
-        handler();
-    }
-    else {
-        m_connection_listeners.push_back(handler);
-    }
-}
-
-void UDTSocket::pipe(shared_ptr<NetworkPipe> pipe) {
-    if (disposed()) return;
-
-    m_pipe = pipe;
-    request_receive();
-}
-
-void UDTSocket::send() {
-    if (disposed()) return;
-
-    if (!m_connected) {
-        m_connected = true;
-        for (auto handler : m_connection_listeners) {
-            handler();
-        }
-        m_connection_listeners.clear();
-    }
-
-    if (m_buffer.size() == 0) {
-        return;
-    }
-
-    cout << "sending " << m_buffer.size() << endl;
-    int bytes_transferred = UDT::send(m_socket, boost::asio::buffer_cast<const char*>(m_buffer.data()), m_buffer.size(), 0);
+    cout << "sending " << m_send_buffer.size() << endl;
+    int bytes_transferred = UDT::send(m_socket, boost::asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size(), 0);
     if (bytes_transferred == UDT::ERROR) {
         cerr << m_name << ": error: " << UDT::getlasterror().getErrorMessage() << endl;
-        m_death_callback();
+        die();
         return;
     }
     else {
         cout << m_name << " sent " << bytes_transferred << endl;
-        m_buffer.consume(bytes_transferred);
+        m_send_buffer.consume(bytes_transferred);
     }
 
-    if (m_buffer.size() > 0) {
+    if (m_send_buffer.size() > 0) {
         // didn't manage to send everything, assume internal buffer is full
         cout << m_name << ": send buffer full, waiting" << endl;
-        request_send();
+        start_sending();
     }
 }
 

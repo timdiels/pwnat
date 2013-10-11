@@ -21,72 +21,42 @@
 #include <boost/bind.hpp>
 
 using namespace std;
+using boost::bind;
 
 template<typename SocketType>
-Socket<SocketType>::Socket(SocketType& socket, shared_ptr<NetworkPipe> pipe, boost::function<void()> death_callback) : 
-    m_socket(socket),
-    m_name("tcp socket"),
-    m_death_callback(death_callback),
-    m_pipe(pipe)
+Socket<SocketType>::Socket(SocketType& socket, DeathHandler death_handler) : 
+    AbstractSocket(true, death_handler, "tcp socket"),
+    m_socket(socket)
 {
 }
 
 template<typename SocketType>
-Socket<SocketType>::~Socket() {
-    dispose();
-    cout << m_name << ": deallocated" << endl;
+Socket<SocketType>::Socket(DeathHandler death_handler) : 
+    AbstractSocket(true, death_handler, "tcp socket")
+{
 }
 
 template<typename SocketType>
-void Socket<SocketType>::dispose() {
-    if (Disposable::dispose()) {
-        m_pipe.reset();
-    }
+void Socket<SocketType>::connect(u_int16_t source_port, boost::asio::ip::address destination, u_int16_t destination_port) {
+    if (disposed()) return;
+    assert(!connected());
+    // TODO
 }
 
 template<typename SocketType>
-SocketType& Socket<SocketType>::socket() {
-    return m_socket;
+void Socket<SocketType>::receive_data_from(AbstractSocket& socket) {
+    socket.on_received_data(bind(&Socket<SocketType>::send, this->shared_from_this(), _1));
 }
 
 template<typename SocketType>
-void Socket<SocketType>::init() {
-    receive();
-}
-
-template<typename SocketType>
-void Socket<SocketType>::receive() {
+void Socket<SocketType>::start_receiving() {
     if (disposed()) return;
     auto callback = boost::bind(&Socket::handle_receive, this->shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
-    m_socket.async_receive(boost::asio::buffer(m_receive_buffer), callback);
+    m_socket.async_receive(boost::asio::buffer(m_receive_buffer.prepare(64 * 1024)), callback);
 }
 
 template<typename SocketType>
-void Socket<SocketType>::handle_receive(const boost::system::error_code& error, size_t bytes_transferred) {
-    if (disposed()) return;
-    if (error) {
-        cerr << m_name << ": receive error: " << error.message() << endl;
-        m_death_callback();
-        return;
-    }
-    else {
-        cout << m_name << " received " << bytes_transferred << endl;
-        m_pipe->push(m_receive_buffer.data(), bytes_transferred);
-    }
-
-    receive();
-}
-
-template<typename SocketType>
-void Socket<SocketType>::push(const char* data, size_t length) {
-    if (disposed()) return;
-    ostream ostr(&m_send_buffer);
-    ostr.write(data, length);
-    send();
-}
-
-template<typename SocketType>
-void Socket<SocketType>::send() {
+void Socket<SocketType>::start_sending() {
     if (disposed()) return;
     if (m_send_buffer.size() > 0) {
         auto callback = boost::bind(&Socket::handle_send, this->shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
@@ -95,11 +65,29 @@ void Socket<SocketType>::send() {
 }
 
 template<typename SocketType>
-void Socket<SocketType>::handle_send(const boost::system::error_code& error, size_t bytes_transferred) {
+void Socket<SocketType>::handle_receive(const boost::system::error_code& error, size_t bytes_transferred) {
     if (disposed()) return;
     if (error) {
+        cerr << m_name << ": receive error: " << error.message() << endl;
+        die();
+        return;
+    }
+    else {
+        cout << m_name << " received " << bytes_transferred << endl;
+        m_receive_buffer.commit(bytes_transferred);
+        notify_received_data();
+    }
+
+    start_receiving();
+}
+
+template<typename SocketType>
+void Socket<SocketType>::handle_send(const boost::system::error_code& error, size_t bytes_transferred) {
+    if (disposed() || !connected() || m_send_buffer.size() == 0) return;
+
+    if (error) {
         cerr << m_name << ": send error: " << error.message() << endl;
-        m_death_callback();
+        die();
         return;
     }
     else {
@@ -107,6 +95,11 @@ void Socket<SocketType>::handle_send(const boost::system::error_code& error, siz
         m_send_buffer.consume(bytes_transferred);
         send();
     }
+}
+
+template<typename SocketType>
+SocketType& Socket<SocketType>::socket() {
+    return m_socket;
 }
 
 template class Socket<boost::asio::ip::tcp::socket>;

@@ -34,16 +34,18 @@ ProxyClient::ProxyClient(ProxyServer& server, boost::asio::io_service& io_servic
     m_udt_socket(make_shared<UDTSocket>(udt_service, udp_port_s, udp_port_c, m_address, boost::bind(&ProxyClient::die, this)))
 {
     auto callback = boost::bind(&ProxyClient::handle_tcp_connected, this, boost::asio::placeholders::error);
-    m_tcp_socket_.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 22u), callback);
 
     m_udt_socket->init();
+    m_udt_socket->pipe(*this);
 }
 
 ProxyClient::~ProxyClient() {
-    cerr << "ProxyClient deallocating" << endl;
     m_udt_socket->dispose();
     m_tcp_socket->dispose();
+    cout << "ProxyClient: Deallocated" << endl;
 }
+
+    m_tcp_socket_.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(remote_host), remote_port), callback);
 
 boost::asio::ip::address_v4 ProxyClient::address() {
     return m_address;
