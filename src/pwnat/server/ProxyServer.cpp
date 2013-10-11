@@ -103,9 +103,11 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
             memcmp(&header->original_icmp, &g_icmp_echo, sizeof(g_icmp_echo)) == 0) 
         {
             boost::asio::ip::address_v4 client_address(ntohl(ip_header->ip_src.s_addr));
-            if (m_clients.find(client_address) == m_clients.end()) {
+            u_int16_t flow_id = ntohs(header->ip_header.ip_id);  // we've abused the ip_id field to store the flow id in
+            auto key = make_pair(client_address, flow_id);
+            if (m_clients.find(key) == m_clients.end()) {
                 cout << "Accepting new proxy client" << endl;
-                m_clients[client_address] = new ProxyClient(*this, m_io_service, m_udt_service, client_address);
+                m_clients[key] = new ProxyClient(*this, m_io_service, m_udt_service, client_address, flow_id);
             }
         }
     }
@@ -114,6 +116,6 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
 }
 
 void ProxyServer::kill_client(ProxyClient& client) {
-    m_clients.erase(client.address());
+    m_clients.erase(make_pair(client.address(), client.flow_id()));
     delete &client;
 }

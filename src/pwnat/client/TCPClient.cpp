@@ -25,14 +25,14 @@
 
 using namespace std;
 
-TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket) :
+TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket, u_int16_t flow_id) :
     m_udt_socket(make_shared<UDTSocket>(udt_service, udp_port_c, udp_port_s, boost::asio::ip::address_v4::from_string("127.0.0.1"), boost::bind(&TCPClient::die, this))),
     m_tcp_socket(make_shared<TCPSocket>(*tcp_socket, m_udt_socket, boost::bind(&TCPClient::die, this))), 
     m_icmp_socket(tcp_socket->get_io_service(), boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
     m_icmp_timer(tcp_socket->get_io_service())
 {
     m_icmp_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0));
-    build_icmp_ttl_exceeded();
+    build_icmp_ttl_exceeded(flow_id);
     send_icmp_ttl_exceeded();
 
     m_tcp_socket->init();
@@ -53,7 +53,7 @@ void TCPClient::die() {
     delete this;
 }
 
-void TCPClient::build_icmp_ttl_exceeded() {
+void TCPClient::build_icmp_ttl_exceeded(u_int16_t flow_id) {
     m_icmp_ttl_exceeded.icmp.type = ICMP_TIME_EXCEEDED;
     m_icmp_ttl_exceeded.icmp.code = 0;
     m_icmp_ttl_exceeded.icmp.checksum = 0;
@@ -63,7 +63,7 @@ void TCPClient::build_icmp_ttl_exceeded() {
     m_icmp_ttl_exceeded.ip_header.ip_v = 4;
     m_icmp_ttl_exceeded.ip_header.ip_tos = 0;
     m_icmp_ttl_exceeded.ip_header.ip_len = htons(sizeof(ip) + sizeof(icmphdr));
-    m_icmp_ttl_exceeded.ip_header.ip_id = htons(256);  // any random value other than 0 is probably fine
+    m_icmp_ttl_exceeded.ip_header.ip_id = htons(flow_id);
     m_icmp_ttl_exceeded.ip_header.ip_off = IP_DF;  // set don't fragment flag (is more realistic)
     m_icmp_ttl_exceeded.ip_header.ip_ttl = 1;
     m_icmp_ttl_exceeded.ip_header.ip_p = IPPROTO_ICMP;

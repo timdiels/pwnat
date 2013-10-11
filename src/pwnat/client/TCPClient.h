@@ -29,12 +29,15 @@ class UDTService;
 
 class TCPClient {
 public:
-    TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket);
+    /**
+     * flow_id: Identifies which flow on the UDT connection to pick (allows reusing the UDT ports)
+     */
+    TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket, u_int16_t flow_id);
     ~TCPClient();
 
 private:
     void die();
-    void build_icmp_ttl_exceeded();
+    void build_icmp_ttl_exceeded(u_int16_t flow_id);
     void send_icmp_ttl_exceeded();
     void handle_send(const boost::system::error_code& error);
     void handle_icmp_timer_expired(const boost::system::error_code& error);

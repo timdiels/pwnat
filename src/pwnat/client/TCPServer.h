@@ -33,5 +33,6 @@ private:
 private:
     UDTService m_udt_service;
     boost::asio::ip::tcp::acceptor m_acceptor;
+    u_int16_t m_next_flow_id;
 };
 

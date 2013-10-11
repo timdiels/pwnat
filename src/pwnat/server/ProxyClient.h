@@ -31,7 +31,7 @@ class ProxyServer;
 
 class ProxyClient {
 public:
-    ProxyClient(ProxyServer&, boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 client_address);
+    ProxyClient(ProxyServer&, boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 client_address, u_int16_t flow_id);
     virtual ~ProxyClient();
 
     /*
@@ -39,13 +39,16 @@ public:
      */
     boost::asio::ip::address_v4 address();
 
+    u_int16_t flow_id();
+
 private:
     void die();
     void handle_tcp_connected(boost::system::error_code error);
 
 private:
-    ProxyServer& m_server;
     boost::asio::ip::address_v4 m_address;
+    u_int16_t m_flow_id;
+    ProxyServer& m_server;
     boost::asio::ip::tcp::socket m_tcp_socket_;
     std::shared_ptr<TCPSocket> m_tcp_socket;
     std::shared_ptr<UDTSocket> m_udt_socket;

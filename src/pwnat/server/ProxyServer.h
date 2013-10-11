@@ -50,6 +50,6 @@ private:
     boost::array<char, 64 * 1024> m_receive_buffer;
 
     UDTService m_udt_service;
-    std::map<boost::asio::ip::address_v4, ProxyClient*> m_clients; // client ip -> client*
+    std::map<std::pair<boost::asio::ip::address_v4, u_int16_t>, ProxyClient*> m_clients; // (client ip, flow_id) -> client*
 };
 

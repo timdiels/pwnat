@@ -25,7 +25,8 @@ using namespace std;
 
 TCPServer::TCPServer(boost::asio::io_service& io_service) :
     m_udt_service(io_service),
-    m_acceptor(io_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44401u))
+    m_acceptor(io_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44401u)),
+    m_next_flow_id(1u)
 {
     accept();
 }
@@ -42,7 +43,7 @@ void TCPServer::handle_accept(const boost::system::error_code& error, boost::asi
     }
     else {
         cout << "New tcp client at port " << tcp_socket->remote_endpoint().port() << endl;
-        new TCPClient(m_udt_service, tcp_socket);  // Note: ownership of socket transferred to TCPClient instance
+        new TCPClient(m_udt_service, tcp_socket, m_next_flow_id++);  // Note: ownership of socket transferred to TCPClient instance
     }
 
     accept();

@@ -26,9 +26,10 @@
 
 using namespace std;
 
-ProxyClient::ProxyClient(ProxyServer& server, boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 address) : 
-    m_server(server),
+ProxyClient::ProxyClient(ProxyServer& server, boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 address, u_int16_t flow_id) : 
     m_address(address),
+    m_flow_id(flow_id),
+    m_server(server),
     m_tcp_socket_(io_service),
     m_udt_socket(make_shared<UDTSocket>(udt_service, udp_port_s, udp_port_c, m_address, boost::bind(&ProxyClient::die, this)))
 {
@@ -46,6 +47,10 @@ ProxyClient::~ProxyClient() {
 
 boost::asio::ip::address_v4 ProxyClient::address() {
     return m_address;
+}
+
+u_int16_t ProxyClient::flow_id() {
+    return m_flow_id;
 }
 
 void ProxyClient::die() {
