@@ -98,11 +98,17 @@ public:
 protected:
     /**
      * Asynchronously wait for messages
+     *
+     * May end up being called while already receiving.
      */
     virtual void start_receiving() = 0;
 
     /**
-     * (Eventually) send everything currently in send buffer
+     * (Eventually) send everything in send buffer
+     *
+     * Called whenever something is added to the send buffer.
+     *
+     * May end up being called while already sending.
      */
     virtual void start_sending() = 0;
 

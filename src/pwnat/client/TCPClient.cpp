@@ -22,24 +22,23 @@
 #include <pwnat/udtservice/UDTService.h>
 #include <pwnat/constants.h>
 #include <pwnat/checksum.h>
+#include <pwnat/namespaces.h>
+#include <pwnat/util.h>
 
-using namespace std;
-using boost::bind;
-
-TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_socket, u_int16_t flow_id) :
-    m_udt_socket(make_shared<UDTSocket>(udt_service, boost::bind(&TCPClient::die, this))),
-    m_tcp_socket(make_shared<TCPSocket>(*tcp_socket, boost::bind(&TCPClient::die, this))), 
-    m_icmp_socket(tcp_socket->get_io_service(), boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
+TCPClient::TCPClient(UDTService& udt_service, asio::ip::tcp::socket* tcp_socket, u_int16_t flow_id) :
+    m_udt_socket(make_shared<UDTSocket>(udt_service, bind(&TCPClient::die, this))),
+    m_tcp_socket(make_shared<TCPSocket>(shared_ptr<asio::ip::tcp::socket>(tcp_socket), bind(&TCPClient::die, this))), 
+    m_icmp_socket(tcp_socket->get_io_service(), asio::ip::icmp::endpoint(asio::ip::icmp::v4(), 0)),
     m_icmp_timer(tcp_socket->get_io_service())
 {
-    m_icmp_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 0));
+    m_icmp_socket.connect(asio::ip::icmp::endpoint(asio::ip::address::from_string("127.0.0.1"), 0));
     build_icmp_ttl_exceeded(flow_id);
     send_icmp_ttl_exceeded();
 
     m_udt_socket->init();
     send_udt_flow_init("127.0.0.1", 22); // this must be the first data sent onto the socket
-    m_udt_socket->connect(udp_port_c, boost::asio::ip::address::from_string("127.0.0.1"), udp_port_s); // TODO any source port will do, i.e. must send source port to other side with icmp, and share that udp port between udt connections established here (i.e. need a udtprovider class or something)
-    m_udt_socket->on_connected(boost::bind(&TCPClient::handle_udt_connected, this));
+    m_udt_socket->connect(udp_port_c, asio::ip::address::from_string("127.0.0.1"), udp_port_s); // TODO any source port will do, i.e. must send source port to other side with icmp, and share that udp port between udt connections established here (i.e. need a udtprovider class or something)
+    m_udt_socket->on_connected(bind(&TCPClient::handle_udt_connected, this));
 
     m_tcp_socket->init();
 
@@ -48,7 +47,6 @@ TCPClient::TCPClient(UDTService& udt_service, boost::asio::ip::tcp::socket* tcp_
 }
 
 TCPClient::~TCPClient() {
-    delete &m_tcp_socket->socket();
     cout << "TCPClient: Deallocated" << endl;
 }
 
@@ -64,6 +62,8 @@ void TCPClient::send_udt_flow_init(string remote_host, u_int16_t remote_port) {
     udt_flow_init& flow_init = *reinterpret_cast<udt_flow_init*>(buffer.data());
     flow_init.size = size;
     flow_init.remote_port = remote_port;
+    memcpy(buffer.data() + sizeof(udt_flow_init), remote_host.data(), remote_host.length());
+    print_hexdump(buffer.data(), buffer.size());
     m_udt_socket->send(buffer.data(), buffer.size());
 }
 
@@ -93,22 +93,22 @@ void TCPClient::build_icmp_ttl_exceeded(u_int16_t flow_id) {
 void TCPClient::send_icmp_ttl_exceeded() {
     // send
     {
-        auto buffer = boost::asio::buffer(&m_icmp_ttl_exceeded, sizeof(icmp_ttl_exceeded));
-        auto callback = boost::bind(&TCPClient::handle_send, this, boost::asio::placeholders::error);
+        auto buffer = asio::buffer(&m_icmp_ttl_exceeded, sizeof(icmp_ttl_exceeded));
+        auto callback = bind(&TCPClient::handle_send, this, asio::placeholders::error);
         m_icmp_socket.async_send(buffer, callback);
     }
 
     // set timer
     {
         m_icmp_timer.expires_from_now(boost::posix_time::seconds(5));
-        auto callback = boost::bind(&TCPClient::handle_icmp_timer_expired, this, boost::asio::placeholders::error);
+        auto callback = bind(&TCPClient::handle_icmp_timer_expired, this, asio::placeholders::error);
         m_icmp_timer.async_wait(callback);
     }
 }
 
 void TCPClient::handle_icmp_timer_expired(const boost::system::error_code& error) {
     if (error) {
-        if (error.value() != boost::asio::error::operation_aborted) {  // aborted = timer cancelled
+        if (error.value() != asio::error::operation_aborted) {  // aborted = timer cancelled
             cerr << "Unexpected timer error: " << error.message() << endl;
             die();
         }

@@ -18,14 +18,14 @@
  */
 
 #include "AbstractSocket.h"
-
-using namespace std;
-namespace asio = boost::asio;
+#include <pwnat/namespaces.h>
 
 AbstractSocket::AbstractSocket(bool connected, DeathHandler death_handler, string name) :
     m_name(name),
     m_connected(connected),
-    m_death_handler(death_handler)
+    m_death_handler(death_handler),
+    m_connected_handler([](){}),
+    m_received_data_handler([](asio::streambuf&){})
 {
 }
 
@@ -50,6 +50,7 @@ bool AbstractSocket::dispose() {
 void AbstractSocket::init() {
     if (disposed()) return;
     if (m_connected) {
+        m_connected = false;
         notify_connected();
     }
 }
@@ -67,9 +68,9 @@ void AbstractSocket::send(const char* data, size_t length) {
 void AbstractSocket::send(asio::streambuf& buffer) {
     if (disposed()) return;
 
-    istream istr(&buffer);
     ostream ostr(&m_send_buffer);
-    ostr << istr;
+    ostr.write(asio::buffer_cast<const char*>(buffer.data()), buffer.size());
+    buffer.consume(buffer.size());
 
     assert(buffer.size() == 0); // TODO rm
     assert(m_send_buffer.size() > 0);
@@ -117,4 +118,6 @@ void AbstractSocket::notify_connected() {
 void AbstractSocket::die() {
     m_death_handler();
     dispose();
+    // TODO throw exception, seriously we need to, and handle it where appropriate (if anywhere)
 }
+

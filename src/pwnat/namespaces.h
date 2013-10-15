@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 by Daniel Meekins
+ * Copyright (C) 2013 by Tim Diels
  *
  * This file is part of pwnat.
  *
@@ -19,4 +19,11 @@
 
 #pragma once
 
-void print_hexdump(const char *data, int len);
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
+
+// common namespaces aliases
+using namespace std;
+using boost::bind;
+namespace asio = boost::asio;
+

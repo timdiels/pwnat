@@ -17,23 +17,17 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef COMMON_H
-#define COMMON_H
+#pragma once
 
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <limits.h>
-
+#include <limits>
 
 #define NO_DEBUG     0
 #define DEBUG_LEVEL1 1
 #define DEBUG_LEVEL2 2
 #define DEBUG_LEVEL3 3
 
+// TODO rm
 extern int opt_debug;
-extern struct sockaddr_in remote;
 
 #ifdef WIN32
 typedef unsigned char uint8_t;
@@ -48,6 +42,7 @@ typedef unsigned int uint32_t;
 #define _inline_ inline
 #endif
 
+// TODO rm
 #define PERROR_GOTO(cond,err,label){        \
         if(cond)                            \
         {                                   \
@@ -65,22 +60,6 @@ typedef unsigned int uint32_t;
             goto label;                              \
         }}
 
+// TODO rm
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
-
-#ifdef SOLARIS
-/* Copied from sys/time.h on linux system since solaris system that tried to
- * compile on didn't have timeradd macro. */
-#define timeradd(a, b, result)                                                \
-    do {                                                                      \
-        (result)->tv_sec = (a)->tv_sec + (b)->tv_sec;                         \
-        (result)->tv_usec = (a)->tv_usec + (b)->tv_usec;                      \
-        if ((result)->tv_usec >= 1000000)                                     \
-        {                                                                     \
-            ++(result)->tv_sec;                                               \
-            (result)->tv_usec -= 1000000;                                     \
-        }                                                                     \
-    } while (0)
-#endif /* SOLARIS */
-
-#endif /* COMMON_H */

@@ -31,17 +31,14 @@ public:
     /**
      * Construct a socket with an already connected socket
      */
-    Socket(SocketType& socket, DeathHandler);
+    Socket(std::shared_ptr<SocketType> socket, DeathHandler);
 
     /**
      * Construct a socket that has yet to connect
      */
-    Socket(DeathHandler);
-
-    virtual ~Socket();
+    Socket(boost::asio::io_service&, DeathHandler);
 
     void connect(u_int16_t source_port, boost::asio::ip::address destination, u_int16_t destination_port);
-    void dispose();
     SocketType& socket();
 
     void receive_data_from(AbstractSocket& socket);
@@ -51,11 +48,14 @@ protected:
     void start_sending();
 
 private:
+    void handle_connected(boost::system::error_code error);
     void handle_receive(const boost::system::error_code& error, size_t bytes_transferred);
     void handle_send(const boost::system::error_code& error, size_t bytes_transferred);
 
 private:
-    SocketType& m_socket;
+    std::shared_ptr<SocketType> m_socket;
+    bool m_receiving;
+    bool m_sending;
 };
 typedef Socket<boost::asio::ip::tcp::socket> TCPSocket;
 

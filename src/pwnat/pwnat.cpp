@@ -33,7 +33,6 @@
 #include "common.h"
 
 int opt_debug = 0;
-struct sockaddr_in remote;
 
 int debug_level = 1; //NO_DEBUG;
 //int ipver = SOCK_IPV4;

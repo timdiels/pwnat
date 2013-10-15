@@ -19,10 +19,9 @@
 
 #include "UDTSocket.h"
 #include <cassert>
+#include <pwnat/namespaces.h>
 #include "udtservice/UDTService.h"
-
-using namespace std;
-using boost::bind;
+#include "util.h"
 
 UDTSocket::UDTSocket(UDTService& udt_service, DeathHandler death_handler) :
     AbstractSocket(false, death_handler, "UDT socket"),
@@ -118,6 +117,7 @@ void UDTSocket::handle_receive() {
     else {
         cout << m_name << " received " << bytes_transferred << endl;
         m_receive_buffer.commit(bytes_transferred);
+        print_hexdump(asio::buffer_cast<const char*>(m_receive_buffer.data()), m_receive_buffer.size());
         notify_received_data();
     }
 
@@ -128,6 +128,7 @@ void UDTSocket::handle_send() {
     if (disposed() || !connected() || m_send_buffer.size() == 0) return;
 
     cout << "sending " << m_send_buffer.size() << endl;
+    print_hexdump(asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size());
     int bytes_transferred = UDT::send(m_socket, boost::asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size(), 0);
     if (bytes_transferred == UDT::ERROR) {
         cerr << m_name << ": error: " << UDT::getlasterror().getErrorMessage() << endl;

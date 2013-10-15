@@ -18,25 +18,26 @@
  */
 
 #include "ProxyClient.h"
-#include <boost/bind.hpp>
-#include <boost/array.hpp>
 #include <pwnat/udtservice/UDTService.h>
 #include <pwnat/constants.h>
+#include <pwnat/namespaces.h>
+#include <pwnat/packet.h>
 #include "ProxyServer.h"
 
-using namespace std;
-
-ProxyClient::ProxyClient(ProxyServer& server, boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 address, u_int16_t flow_id) : 
+ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTService& udt_service, asio::ip::address_v4 address, u_int16_t flow_id) : 
     m_address(address),
     m_flow_id(flow_id),
     m_server(server),
-    m_tcp_socket_(io_service),
-    m_udt_socket(make_shared<UDTSocket>(udt_service, udp_port_s, udp_port_c, m_address, boost::bind(&ProxyClient::die, this)))
+    m_tcp_socket(make_shared<TCPSocket>(io_service, bind(&ProxyClient::die, this))),
+    m_udt_socket(make_shared<UDTSocket>(udt_service, bind(&ProxyClient::die, this)))
 {
-    auto callback = boost::bind(&ProxyClient::handle_tcp_connected, this, boost::asio::placeholders::error);
-
     m_udt_socket->init();
-    m_udt_socket->pipe(*this);
+    m_udt_socket->on_received_data(bind(&ProxyClient::on_receive_udt, this, _1));
+    m_udt_socket->connect(udp_port_s, m_address, udp_port_c);
+
+    m_tcp_socket->init();
+
+    m_udt_socket->receive_data_from(*m_tcp_socket);
 }
 
 ProxyClient::~ProxyClient() {
@@ -45,9 +46,7 @@ ProxyClient::~ProxyClient() {
     cout << "ProxyClient: Deallocated" << endl;
 }
 
-    m_tcp_socket_.async_connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string(remote_host), remote_port), callback);
-
-boost::asio::ip::address_v4 ProxyClient::address() {
+asio::ip::address_v4 ProxyClient::address() {
     return m_address;
 }
 
@@ -59,16 +58,20 @@ void ProxyClient::die() {
     m_server.kill_client(*this);
 }
 
-void ProxyClient::handle_tcp_connected(boost::system::error_code error) {
-    if (error) {
-        cerr << "tcp socket failed to connect: " << error.message() << endl;
-        die();
-        // TODO one day we'll have to implement more robust handling than a simple abort
-        // TODO we'll also want logging of various verbosity levels
-    }
-    else {
-        m_tcp_socket = make_shared<TCPSocket>(m_tcp_socket_, m_udt_socket, boost::bind(&ProxyClient::die, this));
-        m_tcp_socket->init();
-        m_udt_socket->pipe(m_tcp_socket);
+// used only initially to receive the udt_flow_init
+void ProxyClient::on_receive_udt(asio::streambuf& receive_buffer) {
+    if (receive_buffer.size() > sizeof(udt_flow_init)) {
+        auto* buffer = asio::buffer_cast<const char*>(receive_buffer.data());
+        auto* flow_init = reinterpret_cast<const udt_flow_init*>(buffer);
+        if (flow_init->size <= receive_buffer.size()) {
+            string remote_host(buffer + sizeof(udt_flow_init), flow_init->size - sizeof(udt_flow_init));
+            cout << "connecting to " << remote_host << ":" << flow_init->remote_port << endl;
+
+            m_tcp_socket->connect(0, asio::ip::address::from_string(remote_host), flow_init->remote_port);
+            receive_buffer.consume(flow_init->size);
+
+            m_tcp_socket->receive_data_from(*m_udt_socket);  // this also unsets our on_receive handler
+        }
     }
 }
+

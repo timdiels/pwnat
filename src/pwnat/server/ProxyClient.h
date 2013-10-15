@@ -43,13 +43,12 @@ public:
 
 private:
     void die();
-    void handle_tcp_connected(boost::system::error_code error);
+    void on_receive_udt(boost::asio::streambuf& receive_buffer);
 
 private:
     boost::asio::ip::address_v4 m_address;
     u_int16_t m_flow_id;
     ProxyServer& m_server;
-    boost::asio::ip::tcp::socket m_tcp_socket_;
     std::shared_ptr<TCPSocket> m_tcp_socket;
     std::shared_ptr<UDTSocket> m_udt_socket;
 };

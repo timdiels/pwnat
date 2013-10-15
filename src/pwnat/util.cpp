@@ -19,13 +19,14 @@
 
 #include "util.h"
 #include <cstring>
-#include "common.h"
+#include <cstdio>
+#include <cstdint>
 
 using namespace std;
 
 extern int debug_level;
 
-void print_hexdump(char *data, int len)
+void print_hexdump(const char *data, int len)
 {
     int line;
     int max_lines = (len / 16) + (len % 16 == 0 ? 0 : 1);
