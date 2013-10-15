@@ -20,9 +20,10 @@
 #include "ProxyClient.h"
 #include <pwnat/udtservice/UDTService.h>
 #include <pwnat/constants.h>
-#include <pwnat/namespaces.h>
 #include <pwnat/packet.h>
 #include "ProxyServer.h"
+
+#include <pwnat/namespaces.h>
 
 ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTService& udt_service, asio::ip::address_v4 address, u_int16_t flow_id) : 
     m_address(address),

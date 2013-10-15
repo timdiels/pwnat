@@ -19,9 +19,10 @@
 
 #include "UDTSocket.h"
 #include <cassert>
-#include <pwnat/namespaces.h>
 #include "udtservice/UDTService.h"
 #include "util.h"
+
+#include <pwnat/namespaces.h>
 
 UDTSocket::UDTSocket(UDTService& udt_service, DeathHandler death_handler) :
     AbstractSocket(false, death_handler, "UDT socket"),
@@ -39,7 +40,7 @@ UDTSocket::~UDTSocket() {
     UDT::close(m_socket);
 }
 
-void UDTSocket::connect(u_int16_t source_port, boost::asio::ip::address destination, u_int16_t destination_port) {
+void UDTSocket::connect(u_int16_t source_port, asio::ip::address destination, u_int16_t destination_port) {
     if (disposed()) return;
     assert(!connected());
     // TODO support ipv6, everywhere
@@ -72,7 +73,7 @@ void UDTSocket::connect(u_int16_t source_port, boost::asio::ip::address destinat
     }
 
     // find out when we're connected
-    m_udt_service.request_send(m_socket, boost::bind(&UDTSocket::notify_connected, shared_from_this()));
+    m_udt_service.request_send(m_socket, bind(&UDTSocket::notify_connected, shared_from_this()));
 }
 
 void UDTSocket::receive_data_from(AbstractSocket& socket) {
@@ -104,7 +105,7 @@ void UDTSocket::handle_receive() {
 
     cout << "receiving" << endl;
     const size_t buffer_size = 64 * 1024;
-    int bytes_transferred = UDT::recv(m_socket, boost::asio::buffer_cast<char*>(m_receive_buffer.prepare(buffer_size)), buffer_size, 0);
+    int bytes_transferred = UDT::recv(m_socket, asio::buffer_cast<char*>(m_receive_buffer.prepare(buffer_size)), buffer_size, 0);
     if (bytes_transferred == UDT::ERROR) {
         auto error = UDT::getlasterror();
         const int EASYNCRCV = 6002; // no data available to receive
@@ -129,7 +130,7 @@ void UDTSocket::handle_send() {
 
     cout << "sending " << m_send_buffer.size() << endl;
     print_hexdump(asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size());
-    int bytes_transferred = UDT::send(m_socket, boost::asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size(), 0);
+    int bytes_transferred = UDT::send(m_socket, asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size(), 0);
     if (bytes_transferred == UDT::ERROR) {
         cerr << m_name << ": error: " << UDT::getlasterror().getErrorMessage() << endl;
         die();

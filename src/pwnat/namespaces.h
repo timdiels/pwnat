@@ -26,4 +26,3 @@
 using namespace std;
 using boost::bind;
 namespace asio = boost::asio;
-

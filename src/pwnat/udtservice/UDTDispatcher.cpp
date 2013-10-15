@@ -20,21 +20,21 @@
 #include "UDTDispatcher.h"
 #include <iostream>
 
-using namespace std;
+#include <pwnat/namespaces.h>
 
-UDTDispatcher::UDTDispatcher(boost::asio::io_service& io_service, UDTEventPoller& event_poller, EPOLLOpt event) :
+UDTDispatcher::UDTDispatcher(asio::io_service& io_service, UDTEventPoller& event_poller, EPOLLOpt event) :
     m_io_service(io_service),
     m_event_poller(event_poller),
     m_event(event)
 {
 }
 
-void UDTDispatcher::request_register(UDTSOCKET socket, boost::function<void()> callback) {
+void UDTDispatcher::request_register(UDTSOCKET socket, Callback callback) {
     boost::lock_guard<boost::mutex> guard(m_requests_lock);
     m_requests.push_back(make_pair(socket, callback));
 }
 
-void UDTDispatcher::register_(UDTSOCKET socket, boost::function<void()> callback) {
+void UDTDispatcher::register_(UDTSOCKET socket, Callback callback) {
     cout << "register: " << m_event << endl;
     
     m_event_poller.add(socket, m_event);

@@ -21,20 +21,20 @@
 #include <cassert>
 #include <pwnat/UDTSocket.h>
 
-using namespace std;
+#include <pwnat/namespaces.h>
 
-UDTService::UDTService(boost::asio::io_service& io_service) :
+UDTService::UDTService(asio::io_service& io_service) :
     m_receive_dispatcher(io_service, m_event_poller, UDT_EPOLL_IN),
     m_send_dispatcher(io_service, m_event_poller, UDT_EPOLL_OUT),
-    m_thread(boost::bind(&UDTService::run, this))
+    m_thread(bind(&UDTService::run, this))
 {
 }
 
-void UDTService::request_receive(UDTSOCKET socket, boost::function<void()> callback) {
+void UDTService::request_receive(UDTSOCKET socket, UDTDispatcher::Callback callback) {
     m_receive_dispatcher.request_register(socket, callback);
 }
 
-void UDTService::request_send(UDTSOCKET socket, boost::function<void()> callback) {
+void UDTService::request_send(UDTSOCKET socket, UDTDispatcher::Callback callback) {
     m_send_dispatcher.request_register(socket, callback);
 }
 

@@ -40,14 +40,14 @@ public:
      *
      * UDTService will call the callback once (or twice) when there is data to receive with recv()
      */
-    void request_receive(UDTSOCKET socket, boost::function<void()> callback);
+    void request_receive(UDTSOCKET socket, UDTDispatcher::Callback callback);
 
     /**
      * Notify UDTService that socket wants to send
      *
      * UDTService will call the callback once (or twice) when there is room in buffer to send some data with send()
      */
-    void request_send(UDTSOCKET socket, boost::function<void()> callback);
+    void request_send(UDTSOCKET socket, UDTDispatcher::Callback callback);
 
     /**
      * Unregister from all 

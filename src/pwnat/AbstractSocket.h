@@ -20,7 +20,6 @@
 #pragma once
 
 #include <boost/asio.hpp>
-#include <boost/function.hpp>
 #include <pwnat/Disposable.h>
 
 /**
@@ -39,10 +38,10 @@ public:
     /**
      * receive_buffer: whatever you don't consume will be included in a next call
      */
-    typedef boost::function<void(boost::asio::streambuf& receive_buffer)> ReceivedDataHandler;
+    typedef std::function<void(boost::asio::streambuf& receive_buffer)> ReceivedDataHandler;
 
-    typedef boost::function<void()> ConnectedHandler;
-    typedef boost::function<void()> DeathHandler;
+    typedef std::function<void()> ConnectedHandler;
+    typedef std::function<void()> DeathHandler;
 
 public:
     AbstractSocket(bool connected, DeathHandler death_handler, std::string name);

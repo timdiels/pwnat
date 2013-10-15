@@ -25,14 +25,14 @@
 #include "ProxyClient.h"
 #include <pwnat/packet.h>
 
-using namespace std;
+#include <pwnat/namespaces.h>
 
 ProxyServer::ProxyServer() :
-    m_socket(m_io_service, boost::asio::ip::icmp::endpoint(boost::asio::ip::icmp::v4(), 0)),
+    m_socket(m_io_service, asio::ip::icmp::endpoint(asio::ip::icmp::v4(), 0)),
     m_icmp_timer(m_io_service),
     m_udt_service(m_io_service)
 {
-    m_socket.connect(boost::asio::ip::icmp::endpoint(boost::asio::ip::address::from_string(g_icmp_echo_destination), 0));
+    m_socket.connect(asio::ip::icmp::endpoint(asio::ip::address::from_string(g_icmp_echo_destination), 0));
     send_icmp_echo();
     start_receive();
 }
@@ -51,22 +51,22 @@ void ProxyServer::run() {
 void ProxyServer::send_icmp_echo() {
     // send
     {
-        auto buffer = boost::asio::buffer(&g_icmp_echo, sizeof(g_icmp_echo));
-        auto callback = boost::bind(&ProxyServer::handle_send, this, boost::asio::placeholders::error);
+        auto buffer = asio::buffer(&g_icmp_echo, sizeof(g_icmp_echo));
+        auto callback = bind(&ProxyServer::handle_send, this, asio::placeholders::error);
         m_socket.async_send(buffer, callback);
     }
 
     // set timer
     {
         m_icmp_timer.expires_from_now(boost::posix_time::seconds(5));
-        auto callback = boost::bind(&ProxyServer::handle_icmp_timer_expired, this, boost::asio::placeholders::error);
+        auto callback = bind(&ProxyServer::handle_icmp_timer_expired, this, asio::placeholders::error);
         m_icmp_timer.async_wait(callback);
     }
 }
 
 void ProxyServer::handle_icmp_timer_expired(const boost::system::error_code& error) {
     if (error) {
-        if (error.value() != boost::asio::error::operation_aborted) {  // aborted = timer cancelled
+        if (error.value() != asio::error::operation_aborted) {  // aborted = timer cancelled
             cerr << "Unexpected timer error: " << error.message() << endl;
             abort();
         }
@@ -83,8 +83,8 @@ void ProxyServer::handle_send(const boost::system::error_code& error) {
 }
 
 void ProxyServer::start_receive() {
-    auto callback = boost::bind(&ProxyServer::handle_receive, this, boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred);
-    m_socket.async_receive(boost::asio::buffer(m_receive_buffer), callback);
+    auto callback = bind(&ProxyServer::handle_receive, this, asio::placeholders::error, asio::placeholders::bytes_transferred);
+    m_socket.async_receive(asio::buffer(m_receive_buffer), callback);
 }
 
 void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_transferred) {
@@ -101,7 +101,7 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
             header->icmp.type == ICMP_TIME_EXCEEDED &&
             memcmp(&header->original_icmp, &g_icmp_echo, sizeof(g_icmp_echo)) == 0) 
         {
-            boost::asio::ip::address_v4 client_address(ntohl(ip_header->ip_src.s_addr));
+            asio::ip::address_v4 client_address(ntohl(ip_header->ip_src.s_addr));
             u_int16_t flow_id = ntohs(header->ip_header.ip_id);  // we've abused the ip_id field to store the flow id in
             auto key = make_pair(client_address, flow_id);
             if (m_clients.find(key) == m_clients.end()) {

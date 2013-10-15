@@ -18,6 +18,7 @@
  */
 
 #include "AbstractSocket.h"
+
 #include <pwnat/namespaces.h>
 
 AbstractSocket::AbstractSocket(bool connected, DeathHandler death_handler, string name) :

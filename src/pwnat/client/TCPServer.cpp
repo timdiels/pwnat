@@ -18,26 +18,25 @@
  */
 
 #include "TCPServer.h"
-#include <boost/bind.hpp>
 #include "TCPClient.h"
 
-using namespace std;
+#include <pwnat/namespaces.h>
 
-TCPServer::TCPServer(boost::asio::io_service& io_service) :
+TCPServer::TCPServer(asio::io_service& io_service) :
     m_udt_service(io_service),
-    m_acceptor(io_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::address::from_string("127.0.0.1"), 44401u)),
+    m_acceptor(io_service, asio::ip::tcp::endpoint(asio::ip::address::from_string("127.0.0.1"), 44401u)),
     m_next_flow_id(1u)
 {
     accept();
 }
 
 void TCPServer::accept() {
-    auto new_socket = new boost::asio::ip::tcp::socket(m_acceptor.get_io_service());
-    auto callback = boost::bind(&TCPServer::handle_accept, this, boost::asio::placeholders::error, new_socket);
+    auto new_socket = new asio::ip::tcp::socket(m_acceptor.get_io_service());
+    auto callback = bind(&TCPServer::handle_accept, this, asio::placeholders::error, new_socket);
     m_acceptor.async_accept(*new_socket, callback);
 }
 
-void TCPServer::handle_accept(const boost::system::error_code& error, boost::asio::ip::tcp::socket* tcp_socket) {
+void TCPServer::handle_accept(const boost::system::error_code& error, asio::ip::tcp::socket* tcp_socket) {
     if (error) {
         cerr << "TCP Server: accept error: " << error.message() << endl;
     }

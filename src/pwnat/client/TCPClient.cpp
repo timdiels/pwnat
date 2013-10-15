@@ -22,8 +22,9 @@
 #include <pwnat/udtservice/UDTService.h>
 #include <pwnat/constants.h>
 #include <pwnat/checksum.h>
-#include <pwnat/namespaces.h>
 #include <pwnat/util.h>
+
+#include <pwnat/namespaces.h>
 
 TCPClient::TCPClient(UDTService& udt_service, asio::ip::tcp::socket* tcp_socket, u_int16_t flow_id) :
     m_udt_socket(make_shared<UDTSocket>(udt_service, bind(&TCPClient::die, this))),

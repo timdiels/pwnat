@@ -35,9 +35,12 @@ class UDTSocket;
  */
 class UDTDispatcher {
 public:
+    typedef std::function<void()> Callback;
+
+public:
     UDTDispatcher(boost::asio::io_service&, UDTEventPoller&, EPOLLOpt);
 
-    void request_register(UDTSOCKET socket, boost::function<void()> callback);
+    void request_register(UDTSOCKET socket, Callback callback);
 
     /**
      * Process registration requests
@@ -65,7 +68,7 @@ private:
     /**
      * Register socket to send events to
      */
-    void register_(UDTSOCKET, boost::function<void()> callback);
+    void register_(UDTSOCKET, Callback callback);
 
 private:
     boost::asio::io_service& m_io_service;
@@ -74,6 +77,6 @@ private:
     std::map<UDTSOCKET, boost::function<void()>> m_callbacks;
 
     boost::mutex m_requests_lock;
-    std::vector<std::pair<UDTSOCKET, boost::function<void()>>> m_requests;
+    std::vector<std::pair<UDTSOCKET, Callback>> m_requests;
 };
 
