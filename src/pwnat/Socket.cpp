@@ -124,9 +124,4 @@ void Socket<SocketType>::handle_send(const boost::system::error_code& error, siz
     start_sending();
 }
 
-template<typename SocketType>
-SocketType& Socket<SocketType>::socket() {
-    return *m_socket;
-}
-
 template class Socket<asio::ip::tcp::socket>;

@@ -39,8 +39,6 @@ public:
     Socket(boost::asio::io_service&, DeathHandler);
 
     void connect(u_int16_t source_port, boost::asio::ip::address destination, u_int16_t destination_port);
-    SocketType& socket();
-
     void receive_data_from(AbstractSocket& socket);
 
 protected:
