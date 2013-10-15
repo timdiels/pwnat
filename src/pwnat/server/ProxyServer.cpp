@@ -92,7 +92,6 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
         cerr << "Warning: icmp receive error: " << error.message() << endl;
     }
     else {
-        cout << "received icmp" << endl;
         auto ip_header = reinterpret_cast<ip*>(m_receive_buffer.data());
         const int ip_header_size = ip_header->ip_hl * 4;
         auto header = reinterpret_cast<icmp_ttl_exceeded*>(m_receive_buffer.data() + ip_header_size);
