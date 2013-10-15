@@ -40,7 +40,6 @@ public:
     void connect(u_int16_t source_port, boost::asio::ip::address destination, u_int16_t destination_port);
     void receive_data_from(AbstractSocket& socket);
     bool dispose();
-    UDTSOCKET socket();
 
 protected:
     void start_receiving();

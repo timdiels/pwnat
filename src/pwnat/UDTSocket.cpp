@@ -147,7 +147,3 @@ void UDTSocket::handle_send() {
     }
 }
 
-UDTSOCKET UDTSocket::socket() {
-    return m_socket;
-}
-
