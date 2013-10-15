@@ -114,9 +114,16 @@ void AbstractSocket::notify_connected() {
     }
 }
 
-void AbstractSocket::die() {
+void AbstractSocket::die(const string& reason) {
     m_death_handler();
     dispose();
-    // TODO throw exception, seriously we need to, and handle it where appropriate (if anywhere)
+    cerr << m_name << " died: " << reason << endl;
+    throw SocketException(reason);
+}
+
+void AbstractSocket::die(const string& prefix, const boost::system::error_code& error) {
+    stringstream str;
+    str << prefix << ": " << error.message();
+    die(str.str());
 }
 

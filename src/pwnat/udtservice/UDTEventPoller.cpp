@@ -19,7 +19,7 @@
 
 #include "UDTEventPoller.h"
 #include <iostream>
-#include <sstream>
+#include <pwnat/util.h>
 
 using namespace std;
 
@@ -37,10 +37,7 @@ UDTEventPoller::~UDTEventPoller() {
 }
 
 void UDTEventPoller::udt_throw(string method_name) {
-    stringstream str;
-    UDT::ERRORINFO& e = UDT::getlasterror();
-    str << method_name << ": " << e.getErrorMessage();
-    throw Exception(str.str());
+    throw Exception(format_udt_error(method_name));
 }
 
 void UDTEventPoller::wait(set<UDTSOCKET>& receive_events, set<UDTSOCKET>& send_events) {

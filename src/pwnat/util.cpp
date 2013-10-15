@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 by Daniel Meekins
+ * Copyright (C) 2009, 2013 by Daniel Meekins, Tim Diels
  *
  * This file is part of pwnat.
  *
@@ -21,6 +21,9 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdint>
+
+#include <udt/udt.h>
+#include <sstream>
 
 using namespace std;
 
@@ -84,4 +87,10 @@ void print_hexdump(const char *data, int len)
 
         printf("\n");
     }
+}
+
+string format_udt_error(string prefix) {
+    stringstream str;
+    str << prefix << ": " << UDT::getlasterror().getErrorMessage();
+    return str.str();
 }

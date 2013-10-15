@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 by Daniel Meekins
+ * Copyright (C) 2009, 2013 by Daniel Meekins, Tim Diels
  *
  * This file is part of pwnat.
  *
@@ -19,4 +19,7 @@
 
 #pragma once
 
+#include <string>
+
 void print_hexdump(const char *data, int len);
+std::string format_udt_error(std::string prefix);

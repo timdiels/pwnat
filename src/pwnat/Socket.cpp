@@ -22,7 +22,7 @@
 
 template<typename SocketType>
 Socket<SocketType>::Socket(shared_ptr<SocketType> socket, DeathHandler death_handler) : 
-    AbstractSocket(true, death_handler, "tcp socket"),
+    AbstractSocket(true, death_handler, "TCP socket"),
     m_socket(socket),
     m_receiving(false),
     m_sending(false)
@@ -31,7 +31,7 @@ Socket<SocketType>::Socket(shared_ptr<SocketType> socket, DeathHandler death_han
 
 template<typename SocketType>
 Socket<SocketType>::Socket(asio::io_service& io_service, DeathHandler death_handler) : 
-    AbstractSocket(false, death_handler, "tcp socket"),
+    AbstractSocket(false, death_handler, "TCP Socket"),
     m_socket(make_shared<SocketType>(io_service))
 {
 }
@@ -49,15 +49,13 @@ void Socket<SocketType>::connect(u_int16_t source_port, asio::ip::address destin
 template<typename SocketType>
 void Socket<SocketType>::handle_connected(boost::system::error_code error) {
     if (error) {
-        cerr << "tcp socket failed to connect: " << error.message() << endl;
-        die();
+        die("Failed to connect", error);
     }
     else {
         notify_connected();
     }
 }
 
-// TODO one day we'll have to implement more robust handling than a simple abort
 // TODO we'll also want logging of various verbosity levels
 
 template<typename SocketType>
@@ -92,9 +90,7 @@ void Socket<SocketType>::handle_receive(const boost::system::error_code& error, 
     m_receiving = false;
 
     if (error) {
-        cerr << m_name << ": receive error: " << error.message() << endl;
-        die();
-        return;
+        die("Error while receiving", error);
     }
     else {
         cout << m_name << " received " << bytes_transferred << endl;
@@ -112,9 +108,7 @@ void Socket<SocketType>::handle_send(const boost::system::error_code& error, siz
     m_sending = false;
 
     if (error) {
-        cerr << m_name << ": send error: " << error.message() << endl;
-        die();
-        return;
+        die("Error while sending", error);
     }
     else {
         cout << m_name << " sent " << bytes_transferred << endl;

@@ -22,6 +22,12 @@
 #include <boost/asio.hpp>
 #include <pwnat/Disposable.h>
 
+#include <stdexcept>
+class SocketException : public std::runtime_error {
+public:
+    SocketException(std::string what) : std::runtime_error(what) {}
+};
+
 /**
  * Abstract connection-oriented socket
  *
@@ -124,7 +130,9 @@ protected:
     /**
      * Dispose us and call DeathHandler
      */
-    void die();
+    void die(const std::string& reason);
+
+    void die(const std::string& prefix, const boost::system::error_code& error);
 
 protected:
     boost::asio::streambuf m_receive_buffer;

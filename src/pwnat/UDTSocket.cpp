@@ -18,9 +18,10 @@
  */
 
 #include "UDTSocket.h"
+#include <sstream>
 #include <cassert>
+#include <pwnat/util.h>
 #include "udtservice/UDTService.h"
-#include "util.h"
 
 #include <pwnat/namespaces.h>
 
@@ -30,9 +31,7 @@ UDTSocket::UDTSocket(UDTService& udt_service, DeathHandler death_handler) :
     m_socket(UDT::socket(AF_INET, SOCK_STREAM, 0))
 {
     if (m_socket == UDT::INVALID_SOCK) {
-        cerr << m_name << ": Invalid UDTSOCKET" << endl;
-        die();
-        return; // TODO maybe we should throw instead of return
+        die(format_udt_error("Could not create UDTSOCKET"));
     }
 }
 
@@ -55,9 +54,7 @@ void UDTSocket::connect(u_int16_t source_port, asio::ip::address destination, u_
 
     localhost.sin_port = htons(source_port);
     if (UDT::ERROR == UDT::bind(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
-        cerr << m_name << ": bind() error: " << UDT::getlasterror().getErrorMessage() << endl;
-        die();
-        return;
+        die(format_udt_error("Could not bind"));
     }
 
     bool non_blocking_mode = false;
@@ -67,9 +64,7 @@ void UDTSocket::connect(u_int16_t source_port, asio::ip::address destination, u_
     localhost.sin_addr.s_addr = htonl(destination.to_v4().to_ulong());
     localhost.sin_port = htons(destination_port);
     if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
-        cerr << m_name << ": connect() error: " << UDT::getlasterror().getErrorMessage() << endl;
-        die();
-        return;
+        die(format_udt_error("Could not connect"));
     }
 
     // find out when we're connected
@@ -110,9 +105,7 @@ void UDTSocket::handle_receive() {
         auto error = UDT::getlasterror();
         const int EASYNCRCV = 6002; // no data available to receive
         if (error.getErrorCode() != EASYNCRCV) {
-            cerr << m_name << ": error: " << error.getErrorMessage() << endl;
-            die();
-            return;
+            die(format_udt_error("Failed to receive"));
         }
     }
     else {
@@ -132,9 +125,7 @@ void UDTSocket::handle_send() {
     print_hexdump(asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size());
     int bytes_transferred = UDT::send(m_socket, asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size(), 0);
     if (bytes_transferred == UDT::ERROR) {
-        cerr << m_name << ": error: " << UDT::getlasterror().getErrorMessage() << endl;
-        die();
-        return;
+        die(format_udt_error("Failed to send"));
     }
     else {
         cout << m_name << " sent " << bytes_transferred << endl;
