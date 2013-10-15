@@ -105,7 +105,15 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
             auto key = make_pair(client_address, flow_id);
             if (m_clients.find(key) == m_clients.end()) {
                 cout << "Accepting new proxy client" << endl;
+                try {
                 m_clients[key] = new ProxyClient(*this, m_io_service, m_udt_service, client_address, flow_id);
+                }
+                catch (const exception& e) {
+                    cerr << "Failed to create client: " << e.what() << endl;
+                }
+                catch (...) {
+                    cerr << "Failed to create client: unknown error" << endl;
+                }
             }
         }
     }
