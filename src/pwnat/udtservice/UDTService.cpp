@@ -43,7 +43,7 @@ void UDTService::request_unregister(UDTSOCKET socket) {
     m_unregister_requests.push_back(socket);
 }
 
-void UDTService::run() {
+void UDTService::run() noexcept {
     try {
         cout << "UDT service thread started" << endl;
 
@@ -56,18 +56,23 @@ void UDTService::run() {
          * - a socket is returned in send events <=> socket has room for new data in its send buffer (this is called over and over if you'd leave the socket registered to the write event with no data to send)
          */
         while (true) {
-            m_event_poller.wait(receive_events, send_events);
+            try {
+                m_event_poller.wait(receive_events, send_events);
 
-            // Dispatch events to sockets that can read
-            for (auto socket_handle : receive_events) {
-                m_receive_dispatcher.dispatch(socket_handle);
-                m_send_dispatcher.reregister(socket_handle);
+                // Dispatch events to sockets that can read
+                for (auto socket_handle : receive_events) {
+                    m_receive_dispatcher.dispatch(socket_handle);
+                    m_send_dispatcher.reregister(socket_handle);
+                }
+
+                // Dispatch events to sockets that can write
+                for (auto socket_handle : send_events) {
+                    m_send_dispatcher.dispatch(socket_handle);
+                    m_receive_dispatcher.reregister(socket_handle);
+                }
             }
-
-            // Dispatch events to sockets that can write
-            for (auto socket_handle : send_events) {
-                m_send_dispatcher.dispatch(socket_handle);
-                m_receive_dispatcher.reregister(socket_handle);
+            catch (UDTEventPoller::Exception& e) {
+                cerr << "Warning: " << e.what() << endl;
             }
 
             // Process pending requests
@@ -76,8 +81,12 @@ void UDTService::run() {
     }
     catch (const exception& e) {
         cerr << "UDT service thread crashed: " << e.what() << endl;
-        abort();
     }
+    catch (...) {
+        cerr << "UDT service thread crashed: unknown error" << endl;
+    }
+
+    abort();
 }
 
 void UDTService::process_requests() {

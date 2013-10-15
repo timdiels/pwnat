@@ -37,18 +37,33 @@ void UDTDispatcher::request_register(UDTSOCKET socket, Callback callback) {
 void UDTDispatcher::register_(UDTSOCKET socket, Callback callback) {
     cout << "register: " << m_event << endl;
     
-    m_event_poller.add(socket, m_event);
-    m_callbacks[socket] = callback;
+    try {
+        m_event_poller.add(socket, m_event);
+        m_callbacks[socket] = callback;
+    }
+    catch (UDTEventPoller::Exception& e) {
+        cerr << "Warning: " << e.what() << endl;
+    }
 }
 
 void UDTDispatcher::unregister(UDTSOCKET socket) {
-    m_event_poller.remove(socket);
+    try {
+        m_event_poller.remove(socket);
+    }
+    catch (UDTEventPoller::Exception& e) {
+        cerr << "Warning: " << e.what() << endl;
+    }
     m_callbacks.erase(socket);
 }
 
 void UDTDispatcher::reregister(UDTSOCKET socket) {
     if (m_callbacks.find(socket) != m_callbacks.end()) {
-        m_event_poller.add(socket, m_event);
+        try {
+            m_event_poller.add(socket, m_event);
+        }
+        catch (UDTEventPoller::Exception& e) {
+            cerr << "Warning: " << e.what() << endl;
+        }
     }
 }
 

@@ -19,6 +19,7 @@
 
 #include "UDTEventPoller.h"
 #include <iostream>
+#include <sstream>
 
 using namespace std;
 
@@ -35,24 +36,29 @@ UDTEventPoller::~UDTEventPoller() {
     UDT::epoll_release(m_poll_id);
 }
 
+void UDTEventPoller::udt_throw(string method_name) {
+    stringstream str;
+    UDT::ERRORINFO& e = UDT::getlasterror();
+    str << method_name << ": " << e.getErrorMessage();
+    throw Exception(str.str());
+}
+
 void UDTEventPoller::wait(set<UDTSOCKET>& receive_events, set<UDTSOCKET>& send_events) {
     const int64_t timeout_ms = 100;
     if (UDT::epoll_wait(m_poll_id, &receive_events, &send_events, timeout_ms) < 0) {
-        cerr << "Warning: epoll_wait failed" << endl;
+        udt_throw("epoll_wait");
     }
 }
 
 void UDTEventPoller::add(const UDTSOCKET socket, int events) {
     if (UDT::epoll_add_usock(m_poll_id, socket, &events) < 0) {
-        cerr << "epoll_add_usock failed" << endl;
-        abort();
+        udt_throw("epoll_add_usock");
     }
 }
 
 void UDTEventPoller::remove(const UDTSOCKET socket) {
     if (UDT::epoll_remove_usock(m_poll_id, socket) < 0) {
-        cerr << "epoll_remove_usock failed" << endl;
-        abort();
+        udt_throw("epoll_remove_usock");
     }
 }
 

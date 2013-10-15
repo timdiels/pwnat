@@ -55,7 +55,7 @@ public:
     void request_unregister(UDTSOCKET socket);
 
 private:
-    void run();
+    void run() noexcept;
     void process_requests();
 
 private:

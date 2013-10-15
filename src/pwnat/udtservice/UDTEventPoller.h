@@ -19,12 +19,19 @@
 
 #pragma once
 
+#include <stdexcept>
 #include <udt/udt.h>
 
 /**
  * OO wrapper around UDT epoll functions
  */
 class UDTEventPoller {
+public:
+    class Exception : public std::runtime_error {
+    public:
+        Exception(std::string what) : std::runtime_error(what) {}
+    };
+
 public:
     UDTEventPoller();
     ~UDTEventPoller();
@@ -43,6 +50,9 @@ public:
 
     void add(const UDTSOCKET socket, int events);
     void remove(const UDTSOCKET socket);
+
+private:
+    void udt_throw(std::string method_name);
 
 private:
     int m_poll_id;
