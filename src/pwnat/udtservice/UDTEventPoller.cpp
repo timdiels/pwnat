@@ -38,8 +38,7 @@ UDTEventPoller::~UDTEventPoller() {
 void UDTEventPoller::wait(set<UDTSOCKET>& receive_events, set<UDTSOCKET>& send_events) {
     const int64_t timeout_ms = 100;
     if (UDT::epoll_wait(m_poll_id, &receive_events, &send_events, timeout_ms) < 0) {
-        cerr << "epoll_wait failed" << endl;
-        abort();
+        cerr << "Warning: epoll_wait failed" << endl;
     }
 }
 
