@@ -71,7 +71,7 @@ void UDTService::run() noexcept {
                     m_receive_dispatcher.reregister(socket_handle);
                 }
             }
-            catch (UDTEventPoller::Exception& e) {
+            catch (const UDTEventPoller::Exception& e) {
                 cerr << "Warning: " << e.what() << endl;
             }
 
