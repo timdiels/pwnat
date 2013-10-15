@@ -54,7 +54,7 @@ public:
      */
     void request_unregister(UDTSOCKET socket);
 
-private: // TODO check all things are appropriately private/public
+private:
     void run();
     void process_requests();
 

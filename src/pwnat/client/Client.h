@@ -24,7 +24,7 @@
 
 using namespace std;
 
-class Client { // TODO rename pwnat::client::ProxyClient
+class Client {
 public:
     Client() :
         m_tcp_server(m_io_service)
