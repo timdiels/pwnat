@@ -42,10 +42,15 @@ void TCPServer::handle_accept(const boost::system::error_code& error, asio::ip::
     }
     else {
         cout << "New tcp client at port " << tcp_socket->remote_endpoint().port() << endl;
-        //try {
-        new TCPClient(m_udt_service, tcp_socket, m_next_flow_id++);  // Note: ownership of socket transferred to TCPClient instance
-        /*} catch () {
-        } TODO need decent all round top level error handler thing*/
+        try {
+            new TCPClient(m_udt_service, tcp_socket, m_next_flow_id++);  // Note: ownership of socket transferred to TCPClient instance
+        }
+        catch (const exception& e) {
+            cerr << "Failed to create client: " << e.what() << endl;
+        }
+        catch (...) {
+            cerr << "Failed to create client: unknown error" << endl;
+        }
     }
 
     accept();
