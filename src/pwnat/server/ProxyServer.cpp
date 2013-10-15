@@ -67,8 +67,7 @@ void ProxyServer::send_icmp_echo() {
 void ProxyServer::handle_icmp_timer_expired(const boost::system::error_code& error) {
     if (error) {
         if (error.value() != asio::error::operation_aborted) {  // aborted = timer cancelled
-            cerr << "Unexpected timer error: " << error.message() << endl;
-            abort();
+            cerr << "Warning: Unexpected timer error: " << error.message() << endl;
         }
     }
     else {
