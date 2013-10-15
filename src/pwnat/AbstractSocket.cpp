@@ -72,8 +72,6 @@ void AbstractSocket::send(asio::streambuf& buffer) {
     ostr.write(asio::buffer_cast<const char*>(buffer.data()), buffer.size());
     buffer.consume(buffer.size());
 
-    assert(buffer.size() == 0); // TODO rm
-    assert(m_send_buffer.size() > 0);
     if (connected()) {
         start_sending();
     }
