@@ -17,36 +17,11 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "client/TCPServer.h"
-#include "server/ProxyServer.h"
+#pragma once
 
-using namespace std;
+#include <stdexcept>
 
-/*
- * UDP Tunnel server main(). Handles program arguments, initializes everything,
- * and runs the main loop.
- */
-int udpserver(int argc, char *argv[])
-{
-    try {
-        // prototype code
-        if (argc == 0) {
-            // pretend to be client
-            TCPServer client;
-            client.run();
-        }
-        else {
-            // pretend to be server
-            ProxyServer server;
-            server.run();
-        }
-
-    } catch (exception& e) {
-        cerr << e.what() << endl;
-        abort();
-    }
-
-    cout << "Main thread exiting" << endl;
-    return 0;
-}
-
+class SocketException : public std::runtime_error {
+public:
+    SocketException(std::string what) : std::runtime_error(what) {}
+};

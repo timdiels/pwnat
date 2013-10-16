@@ -19,19 +19,17 @@
 
 #pragma once
 
-#include <boost/asio.hpp>
-#include <pwnat/udtservice/UDTService.h>
+#include <pwnat/Application.h>
 
-class TCPServer {
+class TCPServer : public Application {
 public:
-    TCPServer(boost::asio::io_service& io_service);
+    TCPServer();
 
 private:
     void accept();
     void handle_accept(const boost::system::error_code& error, boost::asio::ip::tcp::socket* tcp_socket);
 
 private:
-    UDTService m_udt_service;
     boost::asio::ip::tcp::acceptor m_acceptor;
     u_int16_t m_next_flow_id;
 };

@@ -54,11 +54,14 @@ public:
      */
     void request_unregister(UDTSOCKET socket);
 
+    void stop();
+
 private:
     void run() noexcept;
     void process_requests();
 
 private:
+    bool m_stopped;
     UDTEventPoller m_event_poller;
     UDTDispatcher m_receive_dispatcher;
     UDTDispatcher m_send_dispatcher;

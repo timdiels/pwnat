@@ -22,9 +22,8 @@
 
 #include <pwnat/namespaces.h>
 
-TCPServer::TCPServer(asio::io_service& io_service) :
-    m_udt_service(io_service),
-    m_acceptor(io_service, asio::ip::tcp::endpoint(asio::ip::address::from_string("127.0.0.1"), 44401u)),
+TCPServer::TCPServer() :
+    m_acceptor(m_io_service, asio::ip::tcp::endpoint(asio::ip::address::from_string("127.0.0.1"), 44401u)),
     m_next_flow_id(1u)
 {
     accept();

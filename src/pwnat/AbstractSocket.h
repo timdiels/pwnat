@@ -21,12 +21,7 @@
 
 #include <boost/asio.hpp>
 #include <pwnat/Disposable.h>
-
-#include <stdexcept>
-class SocketException : public std::runtime_error {
-public:
-    SocketException(std::string what) : std::runtime_error(what) {}
-};
+#include "SocketException.h"
 
 /**
  * Abstract connection-oriented socket

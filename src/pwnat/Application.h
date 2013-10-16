@@ -20,24 +20,24 @@
 #pragma once
 
 #include <boost/asio.hpp>
-#include "TCPServer.h"
+#include <pwnat/udtservice/UDTService.h>
 
-using namespace std;
-
-class Client {
+/**
+ * Singleton application
+ */
+class Application {
 public:
-    Client() :
-        m_tcp_server(m_io_service)
-    {
-    }
+    Application();
 
-    void run() {
-        cout << "running client" << endl;
-        m_io_service.run();
-    }
+    void run();
 
 private:
-    boost::asio::io_service m_io_service;
-    TCPServer m_tcp_server;
-};
+    static void signal_handler(int sig);
 
+protected:
+    boost::asio::io_service m_io_service;
+    UDTService m_udt_service;
+
+private:
+    static Application* m_instance;
+};

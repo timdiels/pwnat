@@ -19,21 +19,19 @@
 
 #pragma once
 
-#include <boost/asio.hpp>
+#include <pwnat/Application.h>
 #include <boost/array.hpp>
-#include <pwnat/udtservice/UDTService.h>
 
 class ProxyClient;
 
 /**
  * Listens for new ProxyClients using pwnat ICMP trickery
  */
-class ProxyServer {
+class ProxyServer : public Application {
 public:
     ProxyServer();
     ~ProxyServer();
 
-    void run(); // TODO rm
     void kill_client(ProxyClient&);
 
 private:
@@ -44,12 +42,10 @@ private:
     void handle_icmp_timer_expired(const boost::system::error_code& error);
 
 private:
-    boost::asio::io_service m_io_service;
     boost::asio::ip::icmp::socket m_socket;
     boost::asio::deadline_timer m_icmp_timer;
     boost::array<char, 64 * 1024> m_receive_buffer;
 
-    UDTService m_udt_service;
     std::map<std::pair<boost::asio::ip::address_v4, u_int16_t>, ProxyClient*> m_clients; // (client ip, flow_id) -> client*
 };
 

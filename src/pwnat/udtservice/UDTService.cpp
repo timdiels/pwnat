@@ -24,6 +24,7 @@
 #include <pwnat/namespaces.h>
 
 UDTService::UDTService(asio::io_service& io_service) :
+    m_stopped(false),
     m_receive_dispatcher(io_service, m_event_poller, UDT_EPOLL_IN),
     m_send_dispatcher(io_service, m_event_poller, UDT_EPOLL_OUT),
     m_thread(bind(&UDTService::run, this))
@@ -55,7 +56,7 @@ void UDTService::run() noexcept {
          * - a socket is returned in receive events <=> socket has data waiting for it in the receive buffer
          * - a socket is returned in send events <=> socket has room for new data in its send buffer (this is called over and over if you'd leave the socket registered to the write event with no data to send)
          */
-        while (true) {
+        while (!m_stopped) {
             try {
                 m_event_poller.wait(receive_events, send_events);
 
@@ -78,6 +79,8 @@ void UDTService::run() noexcept {
             // Process pending requests
             process_requests();
         }
+
+        cout << "UDT service thread stopped" << endl;
     }
     catch (const exception& e) {
         cerr << "UDT service thread crashed: " << e.what() << endl;
@@ -99,5 +102,9 @@ void UDTService::process_requests() {
         m_send_dispatcher.unregister(socket);
     }
     m_unregister_requests.clear();
+}
+
+void UDTService::stop() {
+    m_stopped = true;
 }
 

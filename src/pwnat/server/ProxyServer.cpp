@@ -29,8 +29,7 @@
 
 ProxyServer::ProxyServer() :
     m_socket(m_io_service, asio::ip::icmp::endpoint(asio::ip::icmp::v4(), 0)),
-    m_icmp_timer(m_io_service),
-    m_udt_service(m_io_service)
+    m_icmp_timer(m_io_service)
 {
     m_socket.connect(asio::ip::icmp::endpoint(asio::ip::address::from_string(g_icmp_echo_destination), 0));
     send_icmp_echo();
@@ -41,11 +40,6 @@ ProxyServer::~ProxyServer() {
     for (auto entry : m_clients) {
         delete entry.second;
     }
-}
-
-void ProxyServer::run() {
-    cout << "running server" << endl;
-    m_io_service.run();
 }
 
 void ProxyServer::send_icmp_echo() {
