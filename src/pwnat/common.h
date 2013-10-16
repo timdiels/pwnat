@@ -19,22 +19,6 @@
 
 #pragma once
 
-#include <limits>
-
-#define NO_DEBUG     0
-#define DEBUG_LEVEL1 1
-#define DEBUG_LEVEL2 2
-#define DEBUG_LEVEL3 3
-
-// TODO rm
-extern int opt_debug;
-
-#ifdef WIN32
-typedef unsigned char uint8_t;
-typedef unsigned short uint16_t;
-typedef unsigned int uint32_t;
-#endif
-
 /* cl.exe has a different 'inline' keyword for some dumb reason */
 #ifdef WIN32
 #define _inline_ __inline
@@ -42,24 +26,3 @@ typedef unsigned int uint32_t;
 #define _inline_ inline
 #endif
 
-// TODO rm
-#define PERROR_GOTO(cond,err,label){        \
-        if(cond)                            \
-        {                                   \
-                perror(err) ;               \
-            goto label;                     \
-        }}
-
-            //if(debug_level >= DEBUG_LEVEL1)
-
-#define ERROR_GOTO(cond,str,label){                  \
-        if(cond)                                     \
-        {                                            \
-            if(debug_level >= DEBUG_LEVEL2)          \
-                fprintf(stderr, "Error: %s\n", str); \
-            goto label;                              \
-        }}
-
-// TODO rm
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
