@@ -22,9 +22,6 @@
 #include <string>
 #include <netinet/ip_icmp.h>
 
-extern const int udp_port_c;
-extern const int udp_port_s;
-
 extern const std::string g_icmp_echo_destination;
 
 extern const icmphdr g_icmp_echo;

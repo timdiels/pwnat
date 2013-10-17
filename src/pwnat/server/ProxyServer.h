@@ -29,7 +29,7 @@ class ProxyClient;
  */
 class ProxyServer : public Application {
 public:
-    ProxyServer();
+    ProxyServer(const ProgramArgs&);
     ~ProxyServer();
 
     void kill_client(ProxyClient&);

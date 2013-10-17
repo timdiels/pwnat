@@ -20,6 +20,7 @@
 #pragma once
 
 #include <boost/asio.hpp>
+#include <pwnat/ProgramArgs.h>
 #include <pwnat/udtservice/UDTService.h>
 
 /**
@@ -27,9 +28,12 @@
  */
 class Application {
 public:
-    Application();
+    Application(const ProgramArgs&);
+
+    static Application& instance();
 
     void run();
+    const ProgramArgs& args();
 
 private:
     static void signal_handler(int sig);
@@ -40,4 +44,5 @@ protected:
 
 private:
     static Application* m_instance;
+    const ProgramArgs& m_args;
 };

@@ -27,8 +27,9 @@
 
 #include <pwnat/namespaces.h>
 
-ProxyServer::ProxyServer() :
-    m_socket(m_io_service, asio::ip::icmp::endpoint(asio::ip::icmp::v4(), 0)),
+ProxyServer::ProxyServer(const ProgramArgs& args) :
+    Application(args),
+    m_socket(m_io_service, asio::ip::icmp::endpoint(args.icmp_version(), 0)),
     m_icmp_timer(m_io_service)
 {
     m_socket.connect(asio::ip::icmp::endpoint(asio::ip::address::from_string(g_icmp_echo_destination), 0));
@@ -94,7 +95,7 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
             header->icmp.type == ICMP_TIME_EXCEEDED &&
             memcmp(&header->original_icmp, &g_icmp_echo, sizeof(g_icmp_echo)) == 0) 
         {
-            asio::ip::address_v4 client_address(ntohl(ip_header->ip_src.s_addr));
+            asio::ip::address_v4 client_address(ntohl(ip_header->ip_src.s_addr)); // TODO search for occurences of v4, also this section will need specific code for v6
             u_int16_t flow_id = ntohs(header->ip_header.ip_id);  // we've abused the ip_id field to store the flow id in
             auto key = make_pair(client_address, flow_id);
             if (m_clients.find(key) == m_clients.end()) {

@@ -27,8 +27,9 @@
 
 Application* Application::m_instance = nullptr;
 
-Application::Application() :
-    m_udt_service(m_io_service)
+Application::Application(const ProgramArgs& args) :
+    m_udt_service(m_io_service),
+    m_args(args)
 {
     assert(!m_instance); // singleton
     m_instance = this;
@@ -61,5 +62,13 @@ void Application::signal_handler(int sig)
         case SIGINT:
             m_instance->m_io_service.stop();
     }
+}
+
+Application& Application::instance() {
+    return *m_instance;
+}
+
+const ProgramArgs& Application::args() {
+    return m_args;
 }
 

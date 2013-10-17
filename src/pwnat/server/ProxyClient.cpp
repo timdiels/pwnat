@@ -32,9 +32,11 @@ ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTS
     m_tcp_socket(make_shared<TCPSocket>(io_service, bind(&ProxyClient::die, this))),
     m_udt_socket(make_shared<UDTSocket>(udt_service, bind(&ProxyClient::die, this)))
 {
+    auto& args = Application::instance().args();
+
     m_udt_socket->init();
     m_udt_socket->on_received_data(bind(&ProxyClient::on_receive_udt, this, _1));
-    m_udt_socket->connect(udp_port_s, m_address, udp_port_c);
+    m_udt_socket->connect(args.proxy_port(), m_address, 44401u);
 
     m_tcp_socket->init();
 

@@ -23,7 +23,7 @@
 
 class TCPServer : public Application {
 public:
-    TCPServer();
+    TCPServer(ProgramArgs&);
 
 private:
     void accept();

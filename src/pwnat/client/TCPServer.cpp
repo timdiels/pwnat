@@ -22,10 +22,12 @@
 
 #include <pwnat/namespaces.h>
 
-TCPServer::TCPServer() :
-    m_acceptor(m_io_service, asio::ip::tcp::endpoint(asio::ip::address::from_string("127.0.0.1"), 44401u)),
+TCPServer::TCPServer(ProgramArgs& args) :
+    Application(args),
+    m_acceptor(m_io_service, asio::ip::tcp::endpoint(args.bind_address(), args.local_port())),
     m_next_flow_id(1u)
 {
+    args.resolve_proxy_host(m_io_service);
     accept();
 }
 

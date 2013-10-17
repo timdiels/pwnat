@@ -23,22 +23,25 @@
 #include <pwnat/constants.h>
 #include <pwnat/checksum.h>
 #include <pwnat/util.h>
+#include <pwnat/Application.h>
 
 #include <pwnat/namespaces.h>
 
 TCPClient::TCPClient(UDTService& udt_service, asio::ip::tcp::socket* tcp_socket, u_int16_t flow_id) :
     m_udt_socket(make_shared<UDTSocket>(udt_service, bind(&TCPClient::die, this))),
     m_tcp_socket(make_shared<TCPSocket>(shared_ptr<asio::ip::tcp::socket>(tcp_socket), bind(&TCPClient::die, this))), 
-    m_icmp_socket(tcp_socket->get_io_service(), asio::ip::icmp::endpoint(asio::ip::icmp::v4(), 0)),
+    m_icmp_socket(tcp_socket->get_io_service(), asio::ip::icmp::endpoint(Application::instance().args().icmp_version(), 0)),
     m_icmp_timer(tcp_socket->get_io_service())
 {
-    m_icmp_socket.connect(asio::ip::icmp::endpoint(asio::ip::address::from_string("127.0.0.1"), 0));
+    auto& args = Application::instance().args();
+
+    m_icmp_socket.connect(asio::ip::icmp::endpoint(args.proxy_host(), 0));
     build_icmp_ttl_exceeded(flow_id);
     send_icmp_ttl_exceeded();
 
     m_udt_socket->init();
-    send_udt_flow_init("127.0.0.1", 22); // this must be the first data sent onto the socket
-    m_udt_socket->connect(udp_port_c, asio::ip::address::from_string("127.0.0.1"), udp_port_s); // TODO any source port will do, i.e. must send source port to other side with icmp, and share that udp port between udt connections established here (i.e. need a udtprovider class or something)
+    send_udt_flow_init(args.remote_host(), args.remote_port()); // this must be the first data sent onto the socket
+    m_udt_socket->connect(44401u, args.proxy_host(), args.proxy_port()); // TODO use random src port given by the OS and send it to other side // TODO search for 44401 literal, AF_INIT, v4
     m_udt_socket->on_connected(bind(&TCPClient::handle_udt_connected, this));
 
     m_tcp_socket->init();
@@ -69,6 +72,8 @@ void TCPClient::send_udt_flow_init(string remote_host, u_int16_t remote_port) {
 }
 
 void TCPClient::build_icmp_ttl_exceeded(u_int16_t flow_id) {
+    auto& args = Application::instance().args();
+
     m_icmp_ttl_exceeded.icmp.type = ICMP_TIME_EXCEEDED;
     m_icmp_ttl_exceeded.icmp.code = 0;
     m_icmp_ttl_exceeded.icmp.checksum = 0;
@@ -83,7 +88,7 @@ void TCPClient::build_icmp_ttl_exceeded(u_int16_t flow_id) {
     m_icmp_ttl_exceeded.ip_header.ip_ttl = 1;
     m_icmp_ttl_exceeded.ip_header.ip_p = IPPROTO_ICMP;
     m_icmp_ttl_exceeded.ip_header.ip_sum = 0;
-    inet_pton(AF_INET, "127.0.0.1", &m_icmp_ttl_exceeded.ip_header.ip_src);  // TODO the ip of the proxy server
+    inet_pton(AF_INET, args.proxy_host().to_string().c_str(), &m_icmp_ttl_exceeded.ip_header.ip_src); // TODO need specific code to do ipv6 here
     inet_pton(AF_INET, g_icmp_echo_destination.c_str(), &m_icmp_ttl_exceeded.ip_header.ip_dst);
     m_icmp_ttl_exceeded.ip_header.ip_sum = htons(get_checksum(reinterpret_cast<uint16_t*>(&m_icmp_ttl_exceeded.ip_header), sizeof(ip)));
 

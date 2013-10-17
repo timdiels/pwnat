@@ -21,14 +21,15 @@
 #include <sstream>
 #include <cassert>
 #include <pwnat/util.h>
-#include "udtservice/UDTService.h"
+#include <pwnat/udtservice/UDTService.h>
+#include <pwnat/Application.h>
 
 #include <pwnat/namespaces.h>
 
 UDTSocket::UDTSocket(UDTService& udt_service, DeathHandler death_handler) :
     AbstractSocket(false, death_handler, "UDT socket"),
     m_udt_service(udt_service),
-    m_socket(UDT::socket(AF_INET, SOCK_STREAM, 0))
+    m_socket(UDT::socket(Application::instance().args().address_family(), SOCK_STREAM, 0))
 {
     if (m_socket == UDT::INVALID_SOCK) {
         die(format_udt_error("Could not create UDTSOCKET"));
@@ -42,18 +43,19 @@ UDTSocket::~UDTSocket() {
 void UDTSocket::connect(u_int16_t source_port, asio::ip::address destination, u_int16_t destination_port) {
     if (disposed()) return;
     assert(!connected());
-    // TODO support ipv6, everywhere
 
-    sockaddr_in localhost;
-    localhost.sin_family = AF_INET;
-    inet_pton(AF_INET, "127.0.0.1", &localhost.sin_addr);
-    memset(&localhost.sin_zero, 0, 8);
+    auto& args = Application::instance().args();
+
+    sockaddr_in address;
+    address.sin_family = args.address_family();
+    memset(&address.sin_zero, 0, 8);
 
     bool rendezvous = true;
     UDT::setsockopt(m_socket, 0, UDT_RENDEZVOUS, &rendezvous, sizeof(bool));
 
-    localhost.sin_port = htons(source_port);
-    if (UDT::ERROR == UDT::bind(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
+    inet_pton(args.address_family(), args.bind_address().to_string().c_str(), &address.sin_addr);
+    address.sin_port = htons(source_port);
+    if (UDT::ERROR == UDT::bind(m_socket, reinterpret_cast<sockaddr*>(&address), sizeof(sockaddr_in))) {
         die(format_udt_error("Could not bind"));
     }
 
@@ -61,9 +63,9 @@ void UDTSocket::connect(u_int16_t source_port, asio::ip::address destination, u_
     UDT::setsockopt(m_socket, 0, UDT_SNDSYN, &non_blocking_mode, sizeof(bool));
     UDT::setsockopt(m_socket, 0, UDT_RCVSYN, &non_blocking_mode, sizeof(bool));
 
-    localhost.sin_addr.s_addr = htonl(destination.to_v4().to_ulong());
-    localhost.sin_port = htons(destination_port);
-    if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&localhost), sizeof(sockaddr_in))) {
+    inet_pton(args.address_family(), destination.to_string().c_str(), &address.sin_addr);
+    address.sin_port = htons(destination_port);
+    if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&address), sizeof(sockaddr_in))) {
         die(format_udt_error("Could not connect"));
     }
 
