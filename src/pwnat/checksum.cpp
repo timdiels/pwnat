@@ -1,17 +1,4 @@
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-
-#ifndef WIN32
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#else
-#endif
-
-#include "common.h"
 #include "checksum.h"
 
 uint16_t get_checksum(uint16_t *data, int bytes)
