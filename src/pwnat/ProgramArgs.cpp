@@ -105,14 +105,10 @@ void ProgramArgs::resolve_proxy_host(boost::asio::io_service& io_service) {
     assert(!m_is_server);
     cout << "Resolving " << m_proxy_host_dns << endl;
     asio::ip::udp::resolver resolver(io_service);
-    asio::ip::udp udp_version = asio::ip::udp::v4();
-    if (m_is_ipv6) {
-        udp_version = asio::ip::udp::v6();
-    }
 
     stringstream str;
     str << m_proxy_port;
-    asio::ip::udp::resolver::query query(udp_version, m_proxy_host_dns, str.str());
+    asio::ip::udp::resolver::query query(udp_version(), m_proxy_host_dns, str.str());
     m_proxy_host = resolver.resolve(query)->endpoint().address();
 }
 
@@ -171,6 +167,24 @@ asio::ip::icmp ProgramArgs::icmp_version() const {
     }
     else {
         return asio::ip::icmp::v4();
+    }
+}
+
+asio::ip::udp ProgramArgs::udp_version() const {
+    if (m_is_ipv6) {
+        return asio::ip::udp::v6();
+    }
+    else {
+        return asio::ip::udp::v4();
+    }
+}
+
+asio::ip::tcp ProgramArgs::tcp_version() const {
+    if (m_is_ipv6) {
+        return asio::ip::tcp::v6();
+    }
+    else {
+        return asio::ip::tcp::v4();
     }
 }
 

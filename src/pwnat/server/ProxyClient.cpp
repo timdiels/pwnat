@@ -26,11 +26,13 @@
 #include <pwnat/namespaces.h>
 
 ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTService& udt_service, asio::ip::address_v4 address, u_int16_t flow_id) : 
+    m_io_service(io_service),
     m_address(address),
     m_flow_id(flow_id),
     m_server(server),
     m_tcp_socket(make_shared<TCPSocket>(io_service, bind(&ProxyClient::die, this))),
-    m_udt_socket(make_shared<UDTSocket>(udt_service, bind(&ProxyClient::die, this)))
+    m_udt_socket(make_shared<UDTSocket>(udt_service, bind(&ProxyClient::die, this))),
+    m_resolver(m_io_service)
 {
     auto& args = Application::instance().args();
 
@@ -61,20 +63,35 @@ void ProxyClient::die() {
     m_server.kill_client(*this);
 }
 
+// TODO check what happens when: TCP client dies/eofs, pwnat client closes cleanly, pwnat server closes cleanly, TCP server pwnat connects to dies
 // used only initially to receive the udt_flow_init
 void ProxyClient::on_receive_udt(asio::streambuf& receive_buffer) {
+    auto& args = Application::instance().args();
     if (receive_buffer.size() > sizeof(udt_flow_init)) {
         auto* buffer = asio::buffer_cast<const char*>(receive_buffer.data());
         auto* flow_init = reinterpret_cast<const udt_flow_init*>(buffer);
         if (flow_init->size <= receive_buffer.size()) {
             string remote_host(buffer + sizeof(udt_flow_init), flow_init->size - sizeof(udt_flow_init));
-            cout << "connecting to " << remote_host << ":" << flow_init->remote_port << endl;
-
-            m_tcp_socket->connect(0, asio::ip::address::from_string(remote_host), flow_init->remote_port);
             receive_buffer.consume(flow_init->size);
-
             m_tcp_socket->receive_data_from(*m_udt_socket);  // this also unsets our on_receive handler
+
+            cout << "resolving " << remote_host << ":" << flow_init->remote_port << endl;
+            stringstream str;
+            str << flow_init->remote_port;
+            asio::ip::tcp::resolver::query query(args.tcp_version(), remote_host, str.str());
+            m_resolver.async_resolve(query, bind(&ProxyClient::on_resolved_remote_host, this, asio::placeholders::error, asio::placeholders::iterator));
         }
     }
 }
 
+void ProxyClient::on_resolved_remote_host(const boost::system::error_code& error, asio::ip::tcp::resolver::iterator result) {
+    if (error) {
+        cerr << "Could not resolve: " << error.message() << endl;
+        die();
+    }
+    else {
+        const auto& endpoint = result->endpoint();
+        cout << "connecting to " << result->host_name() << ":" << endpoint.port() << endl;
+        m_tcp_socket->connect(0, endpoint.address(), endpoint.port());
+    }
+}

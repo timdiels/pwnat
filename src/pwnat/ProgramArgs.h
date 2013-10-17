@@ -42,6 +42,8 @@ public:
     u_int16_t remote_port() const;
 
     boost::asio::ip::icmp icmp_version() const;
+    boost::asio::ip::udp udp_version() const;
+    boost::asio::ip::tcp tcp_version() const;
     boost::asio::ip::address loopback() const;
     int address_family() const;
 
@@ -58,7 +60,7 @@ private:
     u_int16_t m_local_port;
     boost::asio::ip::address m_proxy_host;
     std::string m_proxy_host_dns;
-    std::string m_remote_host; // TODO can be a dns string, resolve remotely
+    std::string m_remote_host;
     u_int16_t m_remote_port;
 };
 

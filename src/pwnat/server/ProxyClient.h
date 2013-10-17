@@ -24,8 +24,6 @@
 #include <pwnat/UDTSocket.h>
 #include <pwnat/Socket.h>
 
-// TODO test with dns names instead of ips
-
 class UDTService;
 class ProxyServer;
 
@@ -44,12 +42,15 @@ public:
 private:
     void die();
     void on_receive_udt(boost::asio::streambuf& receive_buffer);
+    void on_resolved_remote_host(const boost::system::error_code& error, boost::asio::ip::tcp::resolver::iterator result);
 
 private:
+    boost::asio::io_service& m_io_service;
     boost::asio::ip::address_v4 m_address;
     u_int16_t m_flow_id;
     ProxyServer& m_server;
     std::shared_ptr<TCPSocket> m_tcp_socket;
     std::shared_ptr<UDTSocket> m_udt_socket;
+    boost::asio::ip::tcp::resolver m_resolver;
 };
 
