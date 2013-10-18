@@ -17,14 +17,24 @@
  * along with pwnat.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/*
+ * Declarations of packets
+ */
+
 #pragma once
 
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
+#include <netinet/ip6.h>
+#include <netinet/icmp6.h>
 
-/**
- * Declarations of packets
- */
+struct icmp6_ttl_exceeded {
+    icmp6_hdr icmp;
+    ip6_hdr ip_header;
+    icmp6_hdr original_icmp;
+};
+// TODO update readme
+
 struct icmp_ttl_exceeded {
     icmphdr icmp;
     ip ip_header;

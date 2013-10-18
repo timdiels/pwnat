@@ -20,7 +20,6 @@
 #include "TCPClient.h"
 #include <boost/bind.hpp>
 #include <pwnat/udtservice/UDTService.h>
-#include <pwnat/constants.h>
 #include <pwnat/checksum.h>
 #include <pwnat/util.h>
 #include <pwnat/Application.h>
@@ -74,32 +73,52 @@ void TCPClient::send_udt_flow_init(string remote_host, u_int16_t remote_port) {
 void TCPClient::build_icmp_ttl_exceeded(u_int16_t flow_id) {
     auto& args = Application::instance().args();
 
-    m_icmp_ttl_exceeded.icmp.type = ICMP_TIME_EXCEEDED;
-    m_icmp_ttl_exceeded.icmp.code = 0;
-    m_icmp_ttl_exceeded.icmp.checksum = 0;
-    memset(&m_icmp_ttl_exceeded.icmp.un, 0, 4);
+    vector<char> original_icmp;
+    args.get_icmp_echo(original_icmp, flow_id, 0);
 
-    m_icmp_ttl_exceeded.ip_header.ip_hl = 5;
-    m_icmp_ttl_exceeded.ip_header.ip_v = 4;
-    m_icmp_ttl_exceeded.ip_header.ip_tos = 0;
-    m_icmp_ttl_exceeded.ip_header.ip_len = htons(sizeof(ip) + sizeof(icmphdr));
-    m_icmp_ttl_exceeded.ip_header.ip_id = htons(flow_id);
-    m_icmp_ttl_exceeded.ip_header.ip_off = IP_DF;  // set don't fragment flag (is more realistic)
-    m_icmp_ttl_exceeded.ip_header.ip_ttl = 1;
-    m_icmp_ttl_exceeded.ip_header.ip_p = IPPROTO_ICMP;
-    m_icmp_ttl_exceeded.ip_header.ip_sum = 0;
-    inet_pton(AF_INET, args.proxy_host().to_string().c_str(), &m_icmp_ttl_exceeded.ip_header.ip_src); // TODO need specific code to do ipv6 here
-    inet_pton(AF_INET, g_icmp_echo_destination.c_str(), &m_icmp_ttl_exceeded.ip_header.ip_dst);
-    m_icmp_ttl_exceeded.ip_header.ip_sum = htons(get_checksum(reinterpret_cast<uint16_t*>(&m_icmp_ttl_exceeded.ip_header), sizeof(ip)));
+    if (args.is_ipv6()) {
+        m_icmp_ttl_exceeded.resize(sizeof(icmp6_ttl_exceeded), 0);
+        auto icmp = reinterpret_cast<icmp6_ttl_exceeded*>(m_icmp_ttl_exceeded.data());
 
-    m_icmp_ttl_exceeded.original_icmp = g_icmp_echo;
-    m_icmp_ttl_exceeded.icmp.checksum = htons(get_checksum(reinterpret_cast<uint16_t*>(&m_icmp_ttl_exceeded), sizeof(icmp_ttl_exceeded)));
+        icmp->icmp.icmp6_type = ICMP6_TIME_EXCEEDED;
+
+        *reinterpret_cast<char*>(&icmp->ip_header.ip6_flow) = 0x60;  // set ip version to 6
+        icmp->ip_header.ip6_plen = htons(sizeof(ip6_hdr) + sizeof(icmp6_hdr));
+        icmp->ip_header.ip6_hlim = 1u;
+        icmp->ip_header.ip6_nxt = IPPROTO_ICMPV6;
+        inet_pton(args.address_family(), args.proxy_host().to_string().c_str(), &icmp->ip_header.ip6_src);
+        inet_pton(args.address_family(), args.icmp_echo_destination().to_string().c_str(), &icmp->ip_header.ip6_dst);
+
+        memcpy(&icmp->original_icmp, original_icmp.data(), original_icmp.size());
+
+        // Note: icmp->icmp.icmp6_cksum is calculated for us by the OS
+    }
+    else {
+        m_icmp_ttl_exceeded.resize(sizeof(icmp_ttl_exceeded), 0);
+        auto icmp = reinterpret_cast<icmp_ttl_exceeded*>(m_icmp_ttl_exceeded.data());
+
+        icmp->icmp.type = ICMP_TIME_EXCEEDED;
+
+        icmp->ip_header.ip_hl = 5u;
+        icmp->ip_header.ip_v = 4u;
+        icmp->ip_header.ip_len = htons(sizeof(ip) + sizeof(icmphdr));
+        icmp->ip_header.ip_off = IP_DF;  // set don't fragment flag (is more realistic)
+        icmp->ip_header.ip_ttl = 1u;
+        icmp->ip_header.ip_p = IPPROTO_ICMP;
+        inet_pton(args.address_family(), args.proxy_host().to_string().c_str(), &icmp->ip_header.ip_src);
+        inet_pton(args.address_family(), args.icmp_echo_destination().to_string().c_str(), &icmp->ip_header.ip_dst);
+        icmp->ip_header.ip_sum = htons(get_checksum(reinterpret_cast<uint16_t*>(&icmp->ip_header), sizeof(ip)));
+
+        memcpy(&icmp->original_icmp, original_icmp.data(), original_icmp.size());
+
+        icmp->icmp.checksum = htons(get_checksum(reinterpret_cast<uint16_t*>(m_icmp_ttl_exceeded.data()), m_icmp_ttl_exceeded.size()));
+    }
 }
 
 void TCPClient::send_icmp_ttl_exceeded() {
     // send
     {
-        auto buffer = asio::buffer(&m_icmp_ttl_exceeded, sizeof(icmp_ttl_exceeded));
+        auto buffer = asio::buffer(m_icmp_ttl_exceeded);
         auto callback = bind(&TCPClient::handle_send, this, asio::placeholders::error);
         m_icmp_socket.async_send(buffer, callback);
     }

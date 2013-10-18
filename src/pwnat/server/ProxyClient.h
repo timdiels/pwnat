@@ -29,15 +29,44 @@ class ProxyServer;
 
 class ProxyClient {
 public:
-    ProxyClient(ProxyServer&, boost::asio::io_service& io_service, UDTService& udt_service, boost::asio::ip::address_v4 client_address, u_int16_t flow_id);
+    // uniquely identifies a proxy client
+    class Id {
+    public:
+        bool operator== (const Id& b) const {
+            return flow_id == b.flow_id && address == b.address;
+        }
+
+        bool operator> (const Id& b) const {
+            if (flow_id > b.flow_id)
+                return true;
+            else if (address > b.address)
+                return true;
+            else
+                return false;
+        }
+
+        bool operator<= (const Id& b) const {
+            return *this == b || *this < b;
+        }
+
+        bool operator< (const Id& b) const {
+            return !(*this >= b);
+        }
+
+        bool operator>= (const Id& b) const {
+            return !(*this < b);
+        }
+
+    public:
+        boost::asio::ip::address address;
+        u_int16_t flow_id;
+    };
+
+public:
+    ProxyClient(ProxyServer&, boost::asio::io_service& io_service, UDTService& udt_service, ProxyClient::Id client_id);
     virtual ~ProxyClient();
 
-    /*
-     * Get client address
-     */
-    boost::asio::ip::address_v4 address();
-
-    u_int16_t flow_id();
+    const Id& id();
 
 private:
     void die();
@@ -45,9 +74,8 @@ private:
     void on_resolved_remote_host(const boost::system::error_code& error, boost::asio::ip::tcp::resolver::iterator result);
 
 private:
+    Id m_id;
     boost::asio::io_service& m_io_service;
-    boost::asio::ip::address_v4 m_address;
-    u_int16_t m_flow_id;
     ProxyServer& m_server;
     std::shared_ptr<TCPSocket> m_tcp_socket;
     std::shared_ptr<UDTSocket> m_udt_socket;

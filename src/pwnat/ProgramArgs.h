@@ -47,6 +47,9 @@ public:
     boost::asio::ip::address loopback() const;
     int address_family() const;
 
+    boost::asio::ip::address icmp_echo_destination() const;
+    void get_icmp_echo(std::vector<char>& buffer, u_int16_t id, u_int16_t sequence) const;
+
 private:
     void print_usage(boost::program_options::options_description& options_spec);
 

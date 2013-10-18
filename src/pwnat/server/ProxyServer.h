@@ -20,9 +20,8 @@
 #pragma once
 
 #include <pwnat/Application.h>
-#include <boost/array.hpp>
-
-class ProxyClient;
+#include <boost/array.hpp> // TODO use std instead
+#include "ProxyClient.h"
 
 /**
  * Listens for new ProxyClients using pwnat ICMP trickery
@@ -40,12 +39,15 @@ private:
     void start_receive();
     void handle_receive(boost::system::error_code error, size_t bytes_transferred);
     void handle_icmp_timer_expired(const boost::system::error_code& error);
+    void add_client(ProxyClient::Id& id);
 
 private:
     boost::asio::ip::icmp::socket m_socket;
     boost::asio::deadline_timer m_icmp_timer;
     boost::array<char, 64 * 1024> m_receive_buffer;
+    std::vector<char> m_icmp_echo;
+    boost::asio::ip::icmp::endpoint m_endpoint; // sender endpoint of last received icmp packet
 
-    std::map<std::pair<boost::asio::ip::address_v4, u_int16_t>, ProxyClient*> m_clients; // (client ip, flow_id) -> client*
+    std::map<ProxyClient::Id, ProxyClient*> m_clients;
 };
 

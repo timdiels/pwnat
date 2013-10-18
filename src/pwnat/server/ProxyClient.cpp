@@ -19,16 +19,14 @@
 
 #include "ProxyClient.h"
 #include <pwnat/udtservice/UDTService.h>
-#include <pwnat/constants.h>
 #include <pwnat/packet.h>
 #include "ProxyServer.h"
 
 #include <pwnat/namespaces.h>
 
-ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTService& udt_service, asio::ip::address_v4 address, u_int16_t flow_id) : 
+ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTService& udt_service, ProxyClient::Id id) : 
+    m_id(id),
     m_io_service(io_service),
-    m_address(address),
-    m_flow_id(flow_id),
     m_server(server),
     m_tcp_socket(make_shared<TCPSocket>(io_service, bind(&ProxyClient::die, this))),
     m_udt_socket(make_shared<UDTSocket>(udt_service, bind(&ProxyClient::die, this))),
@@ -38,7 +36,7 @@ ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTS
 
     m_udt_socket->init();
     m_udt_socket->on_received_data(bind(&ProxyClient::on_receive_udt, this, _1));
-    m_udt_socket->connect(args.proxy_port(), m_address, 44401u);
+    m_udt_socket->connect(args.proxy_port(), id.address, 44401u);
 
     m_tcp_socket->init();
 
@@ -51,12 +49,8 @@ ProxyClient::~ProxyClient() {
     cout << "ProxyClient: Deallocated" << endl;
 }
 
-asio::ip::address_v4 ProxyClient::address() {
-    return m_address;
-}
-
-u_int16_t ProxyClient::flow_id() {
-    return m_flow_id;
+const ProxyClient::Id& ProxyClient::id() {
+    return m_id;
 }
 
 void ProxyClient::die() {

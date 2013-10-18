@@ -46,16 +46,39 @@ void UDTSocket::connect(u_int16_t source_port, asio::ip::address destination, u_
 
     auto& args = Application::instance().args();
 
-    sockaddr_in address;
-    address.sin_family = args.address_family();
-    memset(&address.sin_zero, 0, 8);
+    vector<char> source_addr;
+    vector<char> dest_addr;
+    if (args.is_ipv6()) {
+        source_addr.resize(sizeof(sockaddr_in6), 0);
+
+        auto addr = reinterpret_cast<sockaddr_in6*>(source_addr.data());
+        addr->sin6_family = args.address_family();
+        addr->sin6_port = htons(source_port);
+        inet_pton(args.address_family(), args.bind_address().to_string().c_str(), &addr->sin6_addr);
+
+        dest_addr = source_addr;
+        addr = reinterpret_cast<sockaddr_in6*>(dest_addr.data());
+        addr->sin6_port = htons(destination_port);
+        inet_pton(args.address_family(), destination.to_string().c_str(), &addr->sin6_addr);
+    }
+    else {
+        source_addr.resize(sizeof(sockaddr_in), 0);
+
+        auto addr = reinterpret_cast<sockaddr_in*>(source_addr.data());
+        addr->sin_family = args.address_family();
+        addr->sin_port = htons(source_port);
+        inet_pton(args.address_family(), args.bind_address().to_string().c_str(), &addr->sin_addr);
+
+        dest_addr = source_addr;
+        addr = reinterpret_cast<sockaddr_in*>(dest_addr.data());
+        addr->sin_port = htons(destination_port);
+        inet_pton(args.address_family(), destination.to_string().c_str(), &addr->sin_addr);
+    }
 
     bool rendezvous = true;
     UDT::setsockopt(m_socket, 0, UDT_RENDEZVOUS, &rendezvous, sizeof(bool));
 
-    inet_pton(args.address_family(), args.bind_address().to_string().c_str(), &address.sin_addr);
-    address.sin_port = htons(source_port);
-    if (UDT::ERROR == UDT::bind(m_socket, reinterpret_cast<sockaddr*>(&address), sizeof(sockaddr_in))) {
+    if (UDT::ERROR == UDT::bind(m_socket, reinterpret_cast<sockaddr*>(source_addr.data()), source_addr.size())) {
         die(format_udt_error("Could not bind"));
     }
 
@@ -63,9 +86,7 @@ void UDTSocket::connect(u_int16_t source_port, asio::ip::address destination, u_
     UDT::setsockopt(m_socket, 0, UDT_SNDSYN, &non_blocking_mode, sizeof(bool));
     UDT::setsockopt(m_socket, 0, UDT_RCVSYN, &non_blocking_mode, sizeof(bool));
 
-    inet_pton(args.address_family(), destination.to_string().c_str(), &address.sin_addr);
-    address.sin_port = htons(destination_port);
-    if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(&address), sizeof(sockaddr_in))) {
+    if (UDT::ERROR == UDT::connect(m_socket, reinterpret_cast<sockaddr*>(dest_addr.data()), dest_addr.size())) {
         die(format_udt_error("Could not connect"));
     }
 

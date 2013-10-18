@@ -21,6 +21,8 @@
 #include <iostream>
 #include <boost/asio.hpp>
 #include <pwnat/accumulator.hpp>
+#include <pwnat/checksum.h>
+#include <pwnat/packet.h>
 
 #include <pwnat/namespaces.h>
 namespace po = boost::program_options;
@@ -89,16 +91,6 @@ void ProgramArgs::parse(int argc, char *argv[]) {
             throw runtime_error("Need to specify --remoteport");
         }
     }
-
-    cout<< "serv" << m_is_server << endl 
-        << "ipv6" << m_is_ipv6 << endl 
-        << "v" << m_verbosity << endl 
-        << "bind" << m_bind_address << endl 
-        << "pport" << m_proxy_port << endl
-        << "lport" << m_local_port << endl
-        << "phost" << m_proxy_host << endl
-        << "rhost" << m_remote_host << endl
-        << "rport" << m_remote_port << endl;
 }
 
 void ProgramArgs::resolve_proxy_host(boost::asio::io_service& io_service) {
@@ -203,5 +195,34 @@ int ProgramArgs::address_family() const {
     }
     else {
         return AF_INET;
+    }
+}
+
+asio::ip::address ProgramArgs::icmp_echo_destination() const {
+    return loopback();
+    /*if (m_is_ipv6) {
+        return "::"; // TODO replace by ??
+    }
+    else {
+        return "127.0.0.1"; // TODO replace by 3.3.3.3
+    }*/
+}
+
+void ProgramArgs::get_icmp_echo(vector<char>& buffer, u_int16_t id, u_int16_t sequence) const {
+    buffer.clear();
+    if (m_is_ipv6) {
+        // TODO fix checksum: http://en.wikipedia.org/wiki/ICMPv6#Message_checksum
+        buffer.resize(sizeof(icmp6_hdr), 0);
+        auto icmp = reinterpret_cast<icmp6_hdr*>(buffer.data());
+        icmp->icmp6_type = ICMP6_ECHO_REQUEST;
+        // TODO src port: icmp->icmp6_id
+        icmp->icmp6_cksum = htons(get_checksum(reinterpret_cast<u_int16_t*>(buffer.data()), buffer.size()));
+    }
+    else {
+        buffer.resize(sizeof(icmphdr), 0);
+        auto icmp = reinterpret_cast<icmphdr*>(buffer.data());
+        icmp->type = ICMP_ECHO;
+        // un.echo.id TODO good spot to place src port
+        icmp->checksum = htons(get_checksum(reinterpret_cast<u_int16_t*>(buffer.data()), buffer.size()));
     }
 }

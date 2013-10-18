@@ -21,9 +21,8 @@
 #include <boost/bind.hpp>
 #include <cassert>
 #include <pwnat/UDTSocket.h>
-#include <pwnat/constants.h>
-#include "ProxyClient.h"
 #include <pwnat/packet.h>
+#include <pwnat/util.h>
 
 #include <pwnat/namespaces.h>
 
@@ -32,7 +31,8 @@ ProxyServer::ProxyServer(const ProgramArgs& args) :
     m_socket(m_io_service, asio::ip::icmp::endpoint(args.icmp_version(), 0)),
     m_icmp_timer(m_io_service)
 {
-    m_socket.connect(asio::ip::icmp::endpoint(asio::ip::address::from_string(g_icmp_echo_destination), 0));
+    args.get_icmp_echo(m_icmp_echo, 0u, 0u);
+    m_socket.connect(asio::ip::icmp::endpoint(args.icmp_echo_destination(), 0));
     send_icmp_echo();
     start_receive();
 }
@@ -46,7 +46,7 @@ ProxyServer::~ProxyServer() {
 void ProxyServer::send_icmp_echo() {
     // send
     {
-        auto buffer = asio::buffer(&g_icmp_echo, sizeof(g_icmp_echo));
+        auto buffer = asio::buffer(m_icmp_echo);
         auto callback = bind(&ProxyServer::handle_send, this, asio::placeholders::error);
         m_socket.async_send(buffer, callback);
     }
@@ -78,45 +78,73 @@ void ProxyServer::handle_send(const boost::system::error_code& error) {
 
 void ProxyServer::start_receive() {
     auto callback = bind(&ProxyServer::handle_receive, this, asio::placeholders::error, asio::placeholders::bytes_transferred);
-    m_socket.async_receive(asio::buffer(m_receive_buffer), callback);
+    m_socket.async_receive_from(asio::buffer(m_receive_buffer), m_endpoint, callback);
 }
 
 void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_transferred) {
+    using asio::ip::address;
+    using asio::ip::address_v4;
+    using asio::ip::address_v6;
+
     if (error) {
         cerr << "Warning: icmp receive error: " << error.message() << endl;
     }
     else {
-        auto ip_header = reinterpret_cast<ip*>(m_receive_buffer.data());
-        const int ip_header_size = ip_header->ip_hl * 4;
-        auto header = reinterpret_cast<icmp_ttl_exceeded*>(m_receive_buffer.data() + ip_header_size);
+        auto& args = Application::instance().args();
 
-        if (bytes_transferred == ip_header_size + sizeof(icmp_ttl_exceeded) &&
-            header->ip_header.ip_hl == 5 &&
-            header->icmp.type == ICMP_TIME_EXCEEDED &&
-            memcmp(&header->original_icmp, &g_icmp_echo, sizeof(g_icmp_echo)) == 0) 
-        {
-            asio::ip::address_v4 client_address(ntohl(ip_header->ip_src.s_addr)); // TODO search for occurences of v4, also this section will need specific code for v6
-            u_int16_t flow_id = ntohs(header->ip_header.ip_id);  // we've abused the ip_id field to store the flow id in
-            auto key = make_pair(client_address, flow_id);
-            if (m_clients.find(key) == m_clients.end()) {
-                cout << "Accepting new proxy client" << endl;
-                try {
-                m_clients[key] = new ProxyClient(*this, m_io_service, m_udt_service, client_address, flow_id);
-                }
-                catch (const exception& e) {
-                    cerr << "Failed to create client: " << e.what() << endl;
-                }
-                catch (...) {
-                    cerr << "Failed to create client: unknown error" << endl;
-                }
+        if (args.is_ipv6()) {
+            // Note: Buffer starts with ICMPv6 header (there's no such thing as IP_HDRINCL for raw IPv6 sockets)
+            auto header = reinterpret_cast<icmp6_ttl_exceeded*>(m_receive_buffer.data());
+            if (bytes_transferred == sizeof(icmp6_ttl_exceeded) &&
+                address(address_v6(*reinterpret_cast<address_v6::bytes_type*>(&header->ip_header.ip6_dst))) == args.icmp_echo_destination() &&
+                header->icmp.icmp6_type == ICMP6_TIME_EXCEEDED)
+            {
+                ProxyClient::Id client_id;
+                client_id.address = m_endpoint.address();
+                client_id.flow_id = header->original_icmp.icmp6_id;  // we've abused the id field to store the flow id in
+                //u_int16_t client_port = header->original_icmp.icmp6_seq; // TODO will also need to include client port in the client 'id' of clients map
+                add_client(client_id);
             }
         }
+        else {
+            // Note: Buffer starts with IPv4 header
+            const int ip_header_size = reinterpret_cast<ip*>(m_receive_buffer.data())->ip_hl * 4;
+            auto header = reinterpret_cast<icmp_ttl_exceeded*>(m_receive_buffer.data() + ip_header_size);
+
+            if (bytes_transferred == ip_header_size + sizeof(icmp_ttl_exceeded) &&
+                address(address_v4(*reinterpret_cast<address_v4::bytes_type*>(&header->ip_header.ip_dst))) == args.icmp_echo_destination() &&
+                header->icmp.type == ICMP_TIME_EXCEEDED)
+            {
+                ProxyClient::Id client_id; // TODO ctor
+                client_id.address = m_endpoint.address();
+                client_id.flow_id = header->original_icmp.un.echo.id;  // we've abused the id field to store the flow id in
+                //u_int16_t client_port = header->original_icmp.un.echo.sequence;
+                add_client(client_id);
+            }
+        }
+
+        
     }
 
     start_receive();
 }
 
+void ProxyServer::add_client(ProxyClient::Id& id) {
+    if (m_clients.find(id) == m_clients.end()) {
+        cout << "Accepting new proxy client" << endl;
+        try {
+        m_clients[id] = new ProxyClient(*this, m_io_service, m_udt_service, id);
+        }
+        catch (const exception& e) {
+            cerr << "Failed to create client: " << e.what() << endl;
+        }
+        catch (...) {
+            cerr << "Failed to create client: unknown error" << endl;
+        }
+    }
+}
+
 void ProxyServer::kill_client(ProxyClient& client) {
-    m_clients.erase(make_pair(client.address(), client.flow_id()));
+    m_clients.erase(client.id());
     delete &client;
 }

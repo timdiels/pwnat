@@ -50,5 +50,5 @@ private:
 
     boost::asio::ip::icmp::socket m_icmp_socket;
     boost::asio::deadline_timer m_icmp_timer;
-    icmp_ttl_exceeded m_icmp_ttl_exceeded;
+    std::vector<char> m_icmp_ttl_exceeded;
 };
