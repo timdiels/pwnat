@@ -22,6 +22,9 @@
 #include <csignal>
 #include <pwnat/SocketException.h>
 #include <pwnat/util.h>
+#include <boost/log/core.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -34,6 +37,30 @@ Application::Application(const ProgramArgs& args) :
     assert(!m_instance); // singleton
     m_instance = this;
 
+    boost::log::trivial::severity_level min_severity;
+    switch (args.verbosity()) {
+        case 1:
+            min_severity = boost::log::trivial::error;
+            break;
+
+        case 2:
+            min_severity = boost::log::trivial::warning;
+            break;
+
+        case 3:
+            min_severity = boost::log::trivial::info;
+            break;
+
+        case 4:
+            min_severity = boost::log::trivial::debug;
+            break;
+
+        case 5:
+            min_severity = boost::log::trivial::trace;
+            break;
+    }
+    boost::log::core::get()->set_filter(boost::log::trivial::severity >= min_severity);
+
     signal(SIGINT, Application::signal_handler);
 
     if (UDT::startup() == UDT::ERROR) {
@@ -42,13 +69,13 @@ Application::Application(const ProgramArgs& args) :
 }
 
 void Application::run() {
-    cout << "Running" << endl;
+    BOOST_LOG_TRIVIAL(debug) << "Running" << endl;
     while (!m_io_service.stopped()) {
         try {
             m_io_service.run();
         }
         catch (const SocketException& e) {
-            cerr << e.what() << endl;
+            BOOST_LOG_TRIVIAL(error) << e.what() << endl;
         }
     }
 

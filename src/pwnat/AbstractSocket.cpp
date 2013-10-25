@@ -18,6 +18,7 @@
  */
 
 #include "AbstractSocket.h"
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -32,7 +33,7 @@ AbstractSocket::AbstractSocket(bool connected, DeathHandler death_handler, strin
 
 AbstractSocket::~AbstractSocket() {
     dispose();
-    cout << m_name << ": Deallocated" << endl;
+    BOOST_LOG_TRIVIAL(debug) << m_name << ": Deallocated" << endl;
 }
 
 bool AbstractSocket::dispose() {

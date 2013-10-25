@@ -23,6 +23,7 @@
 #include <pwnat/UDTSocket.h>
 #include <pwnat/packet.h>
 #include <pwnat/util.h>
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -62,7 +63,7 @@ void ProxyServer::send_icmp_echo() {
 void ProxyServer::handle_icmp_timer_expired(const boost::system::error_code& error) {
     if (error) {
         if (error.value() != asio::error::operation_aborted) {  // aborted = timer cancelled
-            cerr << "Warning: Unexpected timer error: " << error.message() << endl;
+            BOOST_LOG_TRIVIAL(warning) << "Warning: Unexpected timer error: " << error.message() << endl;
         }
     }
     else {
@@ -72,7 +73,7 @@ void ProxyServer::handle_icmp_timer_expired(const boost::system::error_code& err
 
 void ProxyServer::handle_send(const boost::system::error_code& error) {
     if (error) {
-        cerr << "Warning: send icmp echo failed: " << error.message() << endl;
+        BOOST_LOG_TRIVIAL(warning) << "Warning: send icmp echo failed: " << error.message() << endl;
     }
 }
 
@@ -88,7 +89,7 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
     using asio::ip::address_v6;
 
     if (error) {
-        cerr << "Warning: icmp receive error: " << error.message() << endl;
+        BOOST_LOG_TRIVIAL(warning) << "Warning: icmp receive error: " << error.message() << endl;
     }
     else {
         auto& args = Application::instance().args();
@@ -123,8 +124,6 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
                 add_client(client_id);
             }
         }
-
-        
     }
 
     start_receive();
@@ -132,15 +131,15 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
 
 void ProxyServer::add_client(ProxyClient::Id& id) {
     if (m_clients.find(id) == m_clients.end()) {
-        cout << "Accepting new proxy client: ip=" << id.address << " flow=" << id.flow_id << " port=" << id.client_port << endl;
+        BOOST_LOG_TRIVIAL(info) << "Accepting new proxy client: ip=" << id.address << " flow=" << id.flow_id << " port=" << id.client_port << endl;
         try {
         m_clients[id] = new ProxyClient(*this, m_io_service, m_udt_service, id);
         }
         catch (const exception& e) {
-            cerr << "Failed to create client: " << e.what() << endl;
+            BOOST_LOG_TRIVIAL(error) << "Failed to create client: " << e.what() << endl;
         }
         catch (...) {
-            cerr << "Failed to create client: unknown error" << endl;
+            BOOST_LOG_TRIVIAL(error) << "Failed to create client: unknown error" << endl;
         }
     }
 }

@@ -19,6 +19,7 @@
 
 #include "TCPServer.h"
 #include "TCPClient.h"
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -39,18 +40,18 @@ void TCPServer::accept() {
 
 void TCPServer::handle_accept(const boost::system::error_code& error, asio::ip::tcp::socket* tcp_socket) {
     if (error) {
-        cerr << "TCP Server: accept error: " << error.message() << endl;
+        BOOST_LOG_TRIVIAL(error) << "TCP Server: accept error: " << error.message() << endl;
     }
     else {
-        cout << "New tcp client at port " << tcp_socket->remote_endpoint().port() << endl;
+        BOOST_LOG_TRIVIAL(info) << "New tcp client at port " << tcp_socket->remote_endpoint().port() << endl;
         try {
             new TCPClient(m_udt_service, tcp_socket, m_next_flow_id++);  // Note: ownership of socket transferred to TCPClient instance
         }
         catch (const exception& e) {
-            cerr << "Failed to create client: " << e.what() << endl;
+            BOOST_LOG_TRIVIAL(error) << "Failed to create client: " << e.what() << endl;
         }
         catch (...) {
-            cerr << "Failed to create client: unknown error" << endl;
+            BOOST_LOG_TRIVIAL(error) << "Failed to create client: unknown error" << endl;
         }
     }
 

@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
 project(pwnat)
 
+add_definitions(-DBOOST_ALL_DYN_LINK)
 set(Boost_USE_STATIC_LIBS OFF) 
-find_package(Boost COMPONENTS system thread program_options)
+find_package(Boost COMPONENTS system thread program_options log)
 if(!Boost_FOUND)
     message("Boost not found")
 endif()

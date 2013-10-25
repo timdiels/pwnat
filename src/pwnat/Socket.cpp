@@ -19,6 +19,7 @@
 
 #include "Socket.h"
 #include <pwnat/namespaces.h>
+#include <boost/log/trivial.hpp>
 
 template<typename SocketType>
 Socket<SocketType>::Socket(shared_ptr<SocketType> socket, DeathHandler death_handler) : 
@@ -93,7 +94,7 @@ void Socket<SocketType>::handle_receive(const boost::system::error_code& error, 
         die("Error while receiving", error);
     }
     else {
-        cout << m_name << " received " << bytes_transferred << endl;
+        BOOST_LOG_TRIVIAL(trace) << m_name << " received " << bytes_transferred << endl;
         m_receive_buffer.commit(bytes_transferred);
         notify_received_data();
     }
@@ -111,7 +112,7 @@ void Socket<SocketType>::handle_send(const boost::system::error_code& error, siz
         die("Error while sending", error);
     }
     else {
-        cout << m_name << " sent " << bytes_transferred << endl;
+        BOOST_LOG_TRIVIAL(trace) << m_name << " sent " << bytes_transferred << endl;
         m_send_buffer.consume(bytes_transferred);
     }
 

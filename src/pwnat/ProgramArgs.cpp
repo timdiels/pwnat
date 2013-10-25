@@ -23,6 +23,7 @@
 #include <pwnat/accumulator.hpp>
 #include <pwnat/checksum.h>
 #include <pwnat/packet.h>
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 namespace po = boost::program_options;
@@ -95,7 +96,7 @@ void ProgramArgs::parse(int argc, char *argv[]) {
 
 void ProgramArgs::resolve_proxy_host(boost::asio::io_service& io_service) {
     assert(!m_is_server);
-    cout << "Resolving " << m_proxy_host_dns << endl;
+    BOOST_LOG_TRIVIAL(debug) << "Resolving " << m_proxy_host_dns << endl;
     asio::ip::udp::resolver resolver(io_service);
 
     stringstream str;

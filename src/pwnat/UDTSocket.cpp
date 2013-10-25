@@ -23,6 +23,7 @@
 #include <pwnat/util.h>
 #include <pwnat/udtservice/UDTService.h>
 #include <pwnat/Application.h>
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -121,7 +122,7 @@ void UDTSocket::start_sending() {
 void UDTSocket::handle_receive() {
     if (disposed()) return;
 
-    cout << "receiving" << endl;
+    BOOST_LOG_TRIVIAL(trace) << "receiving" << endl;
     const size_t buffer_size = 64 * 1024;
     int bytes_transferred = UDT::recv(m_socket, asio::buffer_cast<char*>(m_receive_buffer.prepare(buffer_size)), buffer_size, 0);
     if (bytes_transferred == UDT::ERROR) {
@@ -132,9 +133,11 @@ void UDTSocket::handle_receive() {
         }
     }
     else {
-        cout << m_name << " received " << bytes_transferred << endl;
         m_receive_buffer.commit(bytes_transferred);
-        print_hexdump(asio::buffer_cast<const char*>(m_receive_buffer.data()), m_receive_buffer.size());
+        BOOST_LOG_TRIVIAL(trace)
+            << m_name << " received " << bytes_transferred << ":" << endl
+            << endl
+            << get_hex_dump(asio::buffer_cast<const unsigned char*>(m_receive_buffer.data()), m_receive_buffer.size());
         notify_received_data();
     }
 
@@ -144,20 +147,22 @@ void UDTSocket::handle_receive() {
 void UDTSocket::handle_send() {
     if (disposed() || !connected() || m_send_buffer.size() == 0) return;
 
-    cout << "sending " << m_send_buffer.size() << endl;
-    print_hexdump(asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size());
+    BOOST_LOG_TRIVIAL(trace) 
+        << "sending " << m_send_buffer.size() << ":" << endl
+        << endl
+        << get_hex_dump(asio::buffer_cast<const unsigned char*>(m_send_buffer.data()), m_send_buffer.size()) << endl;
     int bytes_transferred = UDT::send(m_socket, asio::buffer_cast<const char*>(m_send_buffer.data()), m_send_buffer.size(), 0);
     if (bytes_transferred == UDT::ERROR) {
         die(format_udt_error("Failed to send"));
     }
     else {
-        cout << m_name << " sent " << bytes_transferred << endl;
+        BOOST_LOG_TRIVIAL(trace) << m_name << " sent " << bytes_transferred << endl;
         m_send_buffer.consume(bytes_transferred);
     }
 
     if (m_send_buffer.size() > 0) {
         // didn't manage to send everything, assume internal buffer is full
-        cout << m_name << ": send buffer full, waiting" << endl;
+        BOOST_LOG_TRIVIAL(trace) << m_name << ": send buffer full, waiting" << endl;
         start_sending();
     }
 }

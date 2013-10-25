@@ -20,14 +20,15 @@
 #include "UDTEventPoller.h"
 #include <iostream>
 #include <pwnat/util.h>
+#include <boost/log/trivial.hpp>
 
-using namespace std;
+#include <pwnat/namespaces.h>
 
 UDTEventPoller::UDTEventPoller()
 {
     m_poll_id = UDT::epoll_create();
     if (m_poll_id < 0) {
-        cerr << "epoll_create failed" << endl;
+        BOOST_LOG_TRIVIAL(fatal) << "epoll_create failed" << endl;
         abort();
     }
 }

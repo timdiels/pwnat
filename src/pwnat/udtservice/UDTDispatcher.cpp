@@ -19,6 +19,7 @@
 
 #include "UDTDispatcher.h"
 #include <iostream>
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -35,14 +36,12 @@ void UDTDispatcher::request_register(UDTSOCKET socket, Callback callback) {
 }
 
 void UDTDispatcher::register_(UDTSOCKET socket, Callback callback) {
-    cout << "register: " << m_event << endl;
-    
     try {
         m_event_poller.add(socket, m_event);
         m_callbacks[socket] = callback;
     }
     catch (const UDTEventPoller::Exception& e) {
-        cerr << "Warning: " << e.what() << endl;
+        BOOST_LOG_TRIVIAL(warning) << "Warning: " << e.what() << endl;
     }
 }
 
@@ -51,7 +50,7 @@ void UDTDispatcher::unregister(UDTSOCKET socket) {
         m_event_poller.remove(socket);
     }
     catch (const UDTEventPoller::Exception& e) {
-        cerr << "Warning: " << e.what() << endl;
+        BOOST_LOG_TRIVIAL(warning) << "Warning: " << e.what() << endl;
     }
     m_callbacks.erase(socket);
 }
@@ -62,13 +61,12 @@ void UDTDispatcher::reregister(UDTSOCKET socket) {
             m_event_poller.add(socket, m_event);
         }
         catch (const UDTEventPoller::Exception& e) {
-            cerr << "Warning: " << e.what() << endl;
+            BOOST_LOG_TRIVIAL(warning) << "Warning: " << e.what() << endl;
         }
     }
 }
 
 void UDTDispatcher::dispatch(UDTSOCKET socket) {
-    cout << "dispatch " << m_event << endl;
     m_io_service.dispatch(m_callbacks.at(socket));
     unregister(socket);
 }

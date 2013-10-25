@@ -20,6 +20,7 @@
 #include <iostream>
 #include "client/TCPServer.h"
 #include "server/ProxyServer.h"
+#include <boost/log/trivial.hpp>
 
 using namespace std;
 
@@ -51,6 +52,6 @@ int main(int argc, char *argv[]) {
         abort();
     }
 
-    cout << "Main thread exiting" << endl;
+    BOOST_LOG_TRIVIAL(debug) << "Main thread exiting" << endl;
     return 0;
 }

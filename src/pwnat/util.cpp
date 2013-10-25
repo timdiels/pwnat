@@ -18,75 +18,62 @@
  */
 
 #include "util.h"
-#include <cstring>
-#include <cstdio>
-#include <cstdint>
 
 #include <udt/udt.h>
+#include <iomanip>
 #include <sstream>
 
-using namespace std;
+#include <pwnat/namespaces.h>
 
-extern int debug_level;
-
-void print_hexdump(const char *data, int len)
+string get_hex_dump(const unsigned char *data, int len)
 {
-    int line;
     int max_lines = (len / 16) + (len % 16 == 0 ? 0 : 1);
-    int i;
+    stringstream out;
     
-    for(line = 0; line < max_lines; line++)
+    for(int line = 0; line < max_lines; line++)
     {
-        printf("%08x  ", line * 16);
-
         /* print hex */
-        for(i = line * 16; i < (8 + (line * 16)); i++)
-        {
-            if(i < len)
-                printf("%02x ", (uint8_t)data[i]);
-            else
-                printf("   ");
-        }
-        printf(" ");
-        for(i = (line * 16) + 8; i < (16 + (line * 16)); i++)
-        {
-            if(i < len)
-                printf("%02x ", (uint8_t)data[i]);
-            else
-                printf("   ");
-        }
+        out << hex << setfill('0');
 
-        printf(" ");
+        out << setw(8) << line * 16 << "  ";
+
+        for (int k=0; k<2; ++k) {
+            for(int i = line * 16 + 8*k; i < line * 16 + 8*(k+1); i++)
+            {
+                if(i < len) {
+                    out << setw(2) << static_cast<u_int16_t>(data[i]) << " "; 
+                }
+                else {
+                    out << "   ";
+                }
+            }
+            out << " ";
+        }
         
         /* print ascii */
-        for(i = line * 16; i < (8 + (line * 16)); i++)
-        {
-            if(i < len)
+        out << dec << setfill(' ');
+        for (int k=0; k<2; ++k) {
+            for(int i = line * 16 + 8*k; i < line * 16 +  8*(k+1); i++)
             {
-                if(32 <= data[i] && data[i] <= 126)
-                    printf("%c", data[i]);
+                if(i < len)
+                {
+                    if(32 <= data[i] && data[i] <= 126) {
+                        out << data[i];
+                    }
+                    else {
+                        out << ".";
+                    }
+                }
                 else
-                    printf(".");
+                    out << " ";
             }
-            else
-                printf(" ");
-        }
-        printf(" ");
-        for(i = (line * 16) + 8; i < (16 + (line * 16)); i++)
-        {
-            if(i < len)
-            {
-                if(32 <= data[i] && data[i] <= 126)
-                    printf("%c", data[i]);
-                else
-                    printf(".");
-            }
-            else
-                printf(" ");
+            out << " ";
         }
 
-        printf("\n");
+        out << endl;
     }
+
+    return out.str();
 }
 
 string format_udt_error(string prefix) {

@@ -21,6 +21,7 @@
 #include <pwnat/udtservice/UDTService.h>
 #include <pwnat/packet.h>
 #include "ProxyServer.h"
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -46,7 +47,7 @@ ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTS
 ProxyClient::~ProxyClient() {
     m_udt_socket->dispose();
     m_tcp_socket->dispose();
-    cout << "ProxyClient: Deallocated" << endl;
+    BOOST_LOG_TRIVIAL(debug) << "ProxyClient: Deallocated" << endl;
 }
 
 const ProxyClient::Id& ProxyClient::id() {
@@ -69,7 +70,7 @@ void ProxyClient::on_receive_udt(asio::streambuf& receive_buffer) {
             receive_buffer.consume(flow_init->size);
             m_tcp_socket->receive_data_from(*m_udt_socket);  // this also unsets our on_receive handler
 
-            cout << "resolving " << remote_host << ":" << flow_init->remote_port << endl;
+            BOOST_LOG_TRIVIAL(debug) << "Resolving " << remote_host << ":" << flow_init->remote_port << endl;
             stringstream str;
             str << flow_init->remote_port;
             asio::ip::tcp::resolver::query query(args.tcp_version(), remote_host, str.str());
@@ -80,12 +81,12 @@ void ProxyClient::on_receive_udt(asio::streambuf& receive_buffer) {
 
 void ProxyClient::on_resolved_remote_host(const boost::system::error_code& error, asio::ip::tcp::resolver::iterator result) {
     if (error) {
-        cerr << "Could not resolve: " << error.message() << endl;
+        BOOST_LOG_TRIVIAL(error) << "Could not resolve: " << error.message() << endl;
         die();
     }
     else {
         const auto& endpoint = result->endpoint();
-        cout << "connecting to " << result->host_name() << ":" << endpoint.port() << endl;
+        BOOST_LOG_TRIVIAL(debug) << "Connecting to " << result->host_name() << ":" << endpoint.port() << endl;
         m_tcp_socket->connect(0, endpoint.address(), endpoint.port());
     }
 }

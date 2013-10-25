@@ -21,5 +21,5 @@
 
 #include <string>
 
-void print_hexdump(const char *data, int len);
+std::string get_hex_dump(const unsigned char *data, int len);
 std::string format_udt_error(std::string prefix);

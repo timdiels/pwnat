@@ -20,6 +20,7 @@
 #include "UDTService.h"
 #include <cassert>
 #include <pwnat/UDTSocket.h>
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -46,7 +47,7 @@ void UDTService::request_unregister(UDTSOCKET socket) {
 
 void UDTService::run() noexcept {
     try {
-        cout << "UDT service thread started" << endl;
+        BOOST_LOG_TRIVIAL(debug) << "UDT service thread started" << endl;
 
         set<UDTSOCKET> receive_events; // sockets that can receive
         set<UDTSOCKET> send_events; // sockets that can send
@@ -73,20 +74,20 @@ void UDTService::run() noexcept {
                 }
             }
             catch (const UDTEventPoller::Exception& e) {
-                cerr << "Warning: " << e.what() << endl;
+                BOOST_LOG_TRIVIAL(warning) << "Warning: " << e.what() << endl;
             }
 
             // Process pending requests
             process_requests();
         }
 
-        cout << "UDT service thread stopped" << endl;
+        BOOST_LOG_TRIVIAL(debug) << "UDT service thread stopped" << endl;
     }
     catch (const exception& e) {
-        cerr << "UDT service thread crashed: " << e.what() << endl;
+        BOOST_LOG_TRIVIAL(fatal) << "UDT service thread crashed: " << e.what() << endl;
     }
     catch (...) {
-        cerr << "UDT service thread crashed: unknown error" << endl;
+        BOOST_LOG_TRIVIAL(fatal) << "UDT service thread crashed: unknown error" << endl;
     }
 
     abort();

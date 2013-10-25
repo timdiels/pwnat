@@ -21,8 +21,8 @@
 #include <boost/bind.hpp>
 #include <pwnat/udtservice/UDTService.h>
 #include <pwnat/checksum.h>
-#include <pwnat/util.h>
 #include <pwnat/Application.h>
+#include <boost/log/trivial.hpp>
 
 #include <pwnat/namespaces.h>
 
@@ -51,7 +51,7 @@ TCPClient::TCPClient(UDTService& udt_service, asio::ip::tcp::socket* tcp_socket,
 }
 
 TCPClient::~TCPClient() {
-    cout << "TCPClient: Deallocated" << endl;
+    BOOST_LOG_TRIVIAL(debug) << "TCPClient: Deallocated" << endl;
 }
 
 void TCPClient::die() {
@@ -67,7 +67,6 @@ void TCPClient::send_udt_flow_init(string remote_host, u_int16_t remote_port) {
     flow_init.size = size;
     flow_init.remote_port = remote_port;
     memcpy(buffer.data() + sizeof(udt_flow_init), remote_host.data(), remote_host.length());
-    print_hexdump(buffer.data(), buffer.size());
     m_udt_socket->send(buffer.data(), buffer.size());
 }
 
@@ -135,7 +134,7 @@ void TCPClient::send_icmp_ttl_exceeded() {
 void TCPClient::handle_icmp_timer_expired(const boost::system::error_code& error) {
     if (error) {
         if (error.value() != asio::error::operation_aborted) {  // aborted = timer cancelled
-            cerr << "Unexpected timer error: " << error.message() << endl;
+            BOOST_LOG_TRIVIAL(warning) << "Unexpected timer error: " << error.message() << endl;
             die();
         }
     }
@@ -146,7 +145,7 @@ void TCPClient::handle_icmp_timer_expired(const boost::system::error_code& error
 
 void TCPClient::handle_send(const boost::system::error_code& error) {
     if (error) {
-        cerr << "Warning: send icmp ttl exceeded failed: " << error.message() << endl;
+        BOOST_LOG_TRIVIAL(warning) << "Warning: send icmp ttl exceeded failed: " << error.message() << endl;
     }
 }
 
