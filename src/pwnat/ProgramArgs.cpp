@@ -215,14 +215,14 @@ void ProgramArgs::get_icmp_echo(vector<char>& buffer, u_int16_t id, u_int16_t se
         buffer.resize(sizeof(icmp6_hdr), 0);
         auto icmp = reinterpret_cast<icmp6_hdr*>(buffer.data());
         icmp->icmp6_type = ICMP6_ECHO_REQUEST;
-        // TODO src port: icmp->icmp6_id
+        icmp->icmp6_id = htons(id);
         icmp->icmp6_cksum = htons(get_checksum(reinterpret_cast<u_int16_t*>(buffer.data()), buffer.size()));
     }
     else {
         buffer.resize(sizeof(icmphdr), 0);
         auto icmp = reinterpret_cast<icmphdr*>(buffer.data());
         icmp->type = ICMP_ECHO;
-        // un.echo.id TODO good spot to place src port
+        icmp->un.echo.id = htons(id);
         icmp->checksum = htons(get_checksum(reinterpret_cast<u_int16_t*>(buffer.data()), buffer.size()));
     }
 }

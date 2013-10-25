@@ -82,6 +82,7 @@ void ProxyServer::start_receive() {
 }
 
 void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_transferred) {
+    // TODO check received checksum of inner icmp (and ipv4 header; ipv6 has no checksum)
     using asio::ip::address;
     using asio::ip::address_v4;
     using asio::ip::address_v6;
@@ -101,7 +102,7 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
             {
                 ProxyClient::Id client_id;
                 client_id.address = m_endpoint.address();
-                client_id.flow_id = header->original_icmp.icmp6_id;  // we've abused the id field to store the flow id in
+                client_id.flow_id = ntohs(header->original_icmp.icmp6_id);
                 //u_int16_t client_port = header->original_icmp.icmp6_seq; // TODO will also need to include client port in the client 'id' of clients map
                 add_client(client_id);
             }
@@ -117,7 +118,7 @@ void ProxyServer::handle_receive(boost::system::error_code error, size_t bytes_t
             {
                 ProxyClient::Id client_id; // TODO ctor
                 client_id.address = m_endpoint.address();
-                client_id.flow_id = header->original_icmp.un.echo.id;  // we've abused the id field to store the flow id in
+                client_id.flow_id = ntohs(header->original_icmp.un.echo.id);
                 //u_int16_t client_port = header->original_icmp.un.echo.sequence;
                 add_client(client_id);
             }
