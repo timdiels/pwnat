@@ -36,7 +36,7 @@ ProxyClient::ProxyClient(ProxyServer& server, asio::io_service& io_service, UDTS
 
     m_udt_socket->init();
     m_udt_socket->on_received_data(bind(&ProxyClient::on_receive_udt, this, _1));
-    m_udt_socket->connect(args.proxy_port(), id.address, 44401u);
+    m_udt_socket->connect(args.proxy_port(), id.address, id.client_port);
 
     m_tcp_socket->init();
 

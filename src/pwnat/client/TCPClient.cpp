@@ -34,19 +34,20 @@ TCPClient::TCPClient(UDTService& udt_service, asio::ip::tcp::socket* tcp_socket,
 {
     auto& args = Application::instance().args();
 
-    m_icmp_socket.connect(asio::ip::icmp::endpoint(args.proxy_host(), 0));
-    build_icmp_ttl_exceeded(flow_id);
-    send_icmp_ttl_exceeded();
-
     m_udt_socket->init();
     send_udt_flow_init(args.remote_host(), args.remote_port()); // this must be the first data sent onto the socket
-    m_udt_socket->connect(44401u, args.proxy_host(), args.proxy_port()); // TODO use random src port given by the OS and send it to other side // TODO search for 44401 literal, AF_INIT, v4
+    m_udt_socket->connect(0, args.proxy_host(), args.proxy_port()); // TODO search for AF_INIT, v4
     m_udt_socket->on_connected(bind(&TCPClient::handle_udt_connected, this));
 
     m_tcp_socket->init();
 
     m_udt_socket->receive_data_from(*m_tcp_socket);
     m_tcp_socket->receive_data_from(*m_udt_socket);
+
+    m_icmp_socket.connect(asio::ip::icmp::endpoint(args.proxy_host(), 0u));
+    build_icmp_ttl_exceeded(flow_id, m_udt_socket->local_port());
+    send_icmp_ttl_exceeded();
+    // TODO multiple TCPClients cause segfault in pwnat server
 }
 
 TCPClient::~TCPClient() {
@@ -70,11 +71,11 @@ void TCPClient::send_udt_flow_init(string remote_host, u_int16_t remote_port) {
     m_udt_socket->send(buffer.data(), buffer.size());
 }
 
-void TCPClient::build_icmp_ttl_exceeded(u_int16_t flow_id) {
+void TCPClient::build_icmp_ttl_exceeded(u_int16_t flow_id, u_int16_t client_port) {
     auto& args = Application::instance().args();
 
     vector<char> original_icmp;
-    args.get_icmp_echo(original_icmp, flow_id, 0);
+    args.get_icmp_echo(original_icmp, flow_id, client_port);
 
     if (args.is_ipv6()) {
         m_icmp_ttl_exceeded.resize(sizeof(icmp6_ttl_exceeded), 0);

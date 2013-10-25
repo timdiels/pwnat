@@ -162,3 +162,25 @@ void UDTSocket::handle_send() {
     }
 }
 
+u_int16_t UDTSocket::local_port() {
+    vector<char> addr_data;
+    if (Application::instance().args().is_ipv6()) {
+        addr_data.resize(sizeof(sockaddr_in6));
+    }
+    else {
+        addr_data.resize(sizeof(sockaddr_in));
+    }
+
+    int size = addr_data.size();
+    if (UDT::getsockname(m_socket, reinterpret_cast<sockaddr*>(addr_data.data()), &size) == UDT::ERROR) {
+        die(format_udt_error("Failed to get local endpoint"));
+    }
+
+    if (Application::instance().args().is_ipv6()) {
+        return ntohs(reinterpret_cast<sockaddr_in6*>(addr_data.data())->sin6_port);
+    }
+    else {
+        return ntohs(reinterpret_cast<sockaddr_in*>(addr_data.data())->sin_port);
+    }
+}
+

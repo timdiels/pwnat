@@ -33,13 +33,15 @@ public:
     class Id {
     public:
         bool operator== (const Id& b) const {
-            return flow_id == b.flow_id && address == b.address;
+            return flow_id == b.flow_id && address == b.address && client_port == b.client_port;
         }
 
         bool operator> (const Id& b) const {
             if (flow_id > b.flow_id)
                 return true;
             else if (address > b.address)
+                return true;
+            else if (client_port > b.client_port)
                 return true;
             else
                 return false;
@@ -60,6 +62,7 @@ public:
     public:
         boost::asio::ip::address address;
         u_int16_t flow_id;
+        u_int16_t client_port;
     };
 
 public:

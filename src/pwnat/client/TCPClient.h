@@ -38,7 +38,7 @@ public:
 private:
     void die();
     void send_udt_flow_init(std::string remote_host, u_int16_t remote_port);
-    void build_icmp_ttl_exceeded(u_int16_t flow_id);
+    void build_icmp_ttl_exceeded(u_int16_t flow_id, u_int16_t client_port);
     void send_icmp_ttl_exceeded();
     void handle_send(const boost::system::error_code& error);
     void handle_icmp_timer_expired(const boost::system::error_code& error);

@@ -41,6 +41,13 @@ public:
     void receive_data_from(AbstractSocket& socket);
     bool dispose();
 
+    /*
+     * Get currently bound port.
+     *
+     * Must call connect first, though needn't be connected yet
+     */
+    u_int16_t local_port();
+
 protected:
     void start_receiving();
     void start_sending();

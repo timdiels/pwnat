@@ -56,7 +56,7 @@ public:
     void init();
 
     /**
-     * Asynchronously connect
+     * Bind instantly, then asynchronously connect
      *
      * source_port: if 0, a port is picked for you, otherwise given value is used
      *
